@@ -10,7 +10,7 @@ Um assistente pessoal inteligente, modular e extensível construído em **TypeSc
 - **Memória Transparente e Auditável:** Todos os fatos, preferências de desenvolvimento e anotações ficam salvos em arquivos Markdown dentro de `memory/`. Você pode abrir no VS Code ou Obsidian, ler ou editar manualmente a qualquer momento.
 - **Ferramentas de Arquivo (Integração com Obsidian):** O agente consegue criar, ler e listar notas reais no seu sistema de arquivos (por exemplo, no cofre `G:\CofreObsidian\AgentePessoal`) através das ferramentas `write_file`, `read_file` e `list_directory`.
 - **Evolução Autônoma de Persona (`update_persona`):** Se você pedir para mudar o nome ou tom de voz, o Benito atualiza o arquivo `rules.md` no disco de forma permanente.
-- **Extrema Leveza e Performance:** Backend consome menos de 50 MB de RAM. Roda localmente na **RTX 4070 Ti (12GB)** com o modelo **Qwen 2.5 7B (Q5_K_M)** a mais de 80 tokens/segundo.
+- **Extrema Leveza e Performance:** Backend consome menos de 50 MB de RAM. Otimizado para rodar localmente na **RTX 4070 Ti (12GB)** com **Qwen 2.5 14B** ou **Qwen 2.5-Coder 14B** (~40 tokens/s e máxima precisão em tool calling) ou **7B** (>80 tok/s).
 - **Provider Agnóstico:** Protocolo compatível com OpenAI permite alternar entre Ollama local, llama-server ou Gemini Free Tier apenas alterando o `.env`.
 
 ---
@@ -50,14 +50,36 @@ npm install
 ```
 
 ### 2. Iniciar o Modelo Local (Ollama)
-Certifique-se de que o Ollama está rodando e baixe o modelo recomendado:
+Certifique-se de que o Ollama está rodando e baixe os modelos recomendados para a sua RTX 4070 Ti (12GB VRAM):
+
 ```powershell
 # 1. Iniciar o serviço do Ollama
 ollama serve
 
-# 2. Baixar o modelo Qwen 2.5 7B (cerca de 4.7 GB)
-ollama run qwen2.5:7b
+# 2. Baixar o modelo Qwen 2.5 14B (Geral e Produtividade - ~9 GB)
+ollama run qwen2.5:14b
+
+# 3. (Opcional) Baixar o modelo Qwen 2.5 Coder 14B (Especialista em Código/Engenharia - ~9 GB)
+ollama run qwen2.5-coder:14b
 ```
+
+#### 💡 Dica Crucial: Garantir Janela de Contexto (`num_ctx: 8192` ou `16384`)
+Por padrão, o Ollama pode limitar o contexto a 2048 tokens se não configurado, o que pode causar perda de definições de ferramentas com prompts extensos. Para criar uma variante com contexto nativo de 8k ou 16k na sua VRAM:
+
+```powershell
+# Cria uma variante customizada com 8k de contexto no Ollama:
+@"
+FROM qwen2.5:14b
+PARAMETER num_ctx 8192
+"@ | ollama create qwen2.5:14b-8k -f -
+
+# Para o Coder:
+@"
+FROM qwen2.5-coder:14b
+PARAMETER num_ctx 8192
+"@ | ollama create qwen2.5-coder:14b-8k -f -
+```
+Depois, basta apontar no `.env`: `OLLAMA_MODEL=qwen2.5:14b-8k` (ou `qwen2.5-coder:14b-8k`).
 
 *(Dica de performance no Windows: defina a variável de ambiente `OLLAMA_FLASH_ATTENTION=1` para ativar Flash Attention e economizar VRAM).*
 
