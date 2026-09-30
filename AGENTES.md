@@ -38,9 +38,14 @@ BenitoAgentePessoal/
 ├── package.json              # Dependências e scripts
 ├── tsconfig.json             # Configuração estrita do compilador TS
 ├── .env / .env.example       # Variáveis de ambiente (provedores e endpoints)
+├── docker-compose.yml        # Subida do SearXNG local com mapeamento de porta
+├── searxng/
+│   └── settings.yml          # Configurações do SearXNG (JSON API)
 ├── memory/
 │   ├── profile.md            # Perfil do Luiz Ricardo (stack, hardware, fatos aprendidos)
 │   └── rules.md              # Identidade do Benito, diretrizes de resposta e honestidade
+├── tests/
+│   └── test-search.ts        # Testes de integração da busca web e tratamento offline
 └── src/
     ├── config.ts             # Leitura centralizada de variáveis de ambiente
     ├── cli.ts                # Terminal interativo com streaming, cores e comandos
@@ -52,7 +57,8 @@ BenitoAgentePessoal/
     └── tools/
         ├── index.ts          # Registro central onde todas as tools são expostas
         ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (ex: Obsidian)
-        └── memory-tools.ts   # Gravação de fatos (profile) e atualização de persona (rules)
+        ├── memory-tools.ts   # Gravação de fatos (profile) e atualização de persona (rules)
+        └── web-tools.ts      # Ferramenta de busca web em tempo real (SearXNG)
 ```
 
 ---
@@ -130,6 +136,6 @@ Ao adicionar uma nova ferramenta para o Benito:
 
 ## 🚀 Próximas Funcionalidades Sugeridas no Roadmap
 
-1. **Interface Telegram (grammY):** Criar um módulo opcional para conversar com o Benito pelo celular via bot do Telegram.
-2. **Busca na Web (Web Search Tool):** Integrar ferramenta de pesquisa na internet (DuckDuckGo / Tavily) para respostas em tempo real.
+1. **[Concluído] Busca na Web (SearXNG via Docker):** Ferramenta `search_web` integrada localmente sem custos de API e com privacidade.
+2. **Interface Telegram (grammY):** Criar um módulo opcional para conversar com o Benito pelo celular via bot do Telegram.
 3. **Busca Semântica no Obsidian (RAG Local):** Indexar notas do Obsidian usando embeddings locais (`nomic-embed-text` ou `bge-m3` via Ollama) com LanceDB ou SQLite.

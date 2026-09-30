@@ -24,6 +24,7 @@ async function main() {
     console.log(pc.gray(`• Modelo: `) + pc.yellow(config.gemini.model));
   }
   console.log(pc.gray(`• Memória: `) + pc.magenta(config.memoryDir));
+  console.log(pc.gray(`• Busca Web: `) + pc.blue(`SearXNG (${config.searxng.baseUrl})`));
   console.log(pc.gray("--------------------------------------------------"));
   console.log(pc.dim("Comandos especiais: /memoria, /regras, /limpar, /sair, /ajuda"));
   console.log("");
@@ -112,6 +113,11 @@ async function main() {
             const dirPath = (args as { dirPath?: string })?.dirPath || "";
             process.stdout.write(
               pc.dim(pc.magenta(`\n[📂 Pasta: listando "${dirPath}"]\n${agentName}: `))
+            );
+          } else if (toolName === "search_web") {
+            const query = (args as { query?: string })?.query || "";
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[🌐 Web: buscando "${query}"]\n${agentName}: `))
             );
           }
         },

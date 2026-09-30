@@ -18,6 +18,9 @@ export interface AppConfig {
     apiKey: string;
     model: string;
   };
+  searxng: {
+    baseUrl: string;
+  };
   memoryDir: string;
 }
 
@@ -35,6 +38,9 @@ export const config: AppConfig = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || "",
     model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+  },
+  searxng: {
+    baseUrl: process.env.SEARXNG_BASE_URL || "http://localhost:8080",
   },
   memoryDir: path.resolve(process.cwd(), "memory"),
 };

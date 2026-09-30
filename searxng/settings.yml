@@ -1,0 +1,13 @@
+# Configuração do SearXNG para o Benito (Agente Pessoal)
+# Documentação completa: https://docs.searxng.org/admin/settings/
+
+use_default_settings: true
+
+server:
+  secret_key: "benito-searxng-secret-key-change-in-production"
+  image_proxy: true
+
+search:
+  formats:
+    - html
+    - json
