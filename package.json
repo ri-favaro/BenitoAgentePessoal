@@ -1,0 +1,36 @@
+{
+  "name": "agente-pessoal",
+  "version": "0.1.0",
+  "description": "Agente pessoal local com memória persistente e suporte a múltiplos providers de LLM",
+  "main": "src/cli.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "start": "tsx src/cli.ts",
+    "build": "tsc"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "local-llm",
+    "ollama",
+    "qwen",
+    "memory"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@ai-sdk/google": "^1.1.20",
+    "@ai-sdk/openai": "^1.2.0",
+    "ai": "^4.1.54",
+    "dotenv": "^16.4.7",
+    "picocolors": "^1.1.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
+
