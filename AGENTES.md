@@ -11,7 +11,7 @@ Este documento orienta desenvolvedores e agentes de IA (Antigravity, Claude, Cop
   - O runtime do agente roda em Node.js (TypeScript) consumindo menos de 50 MB de RAM.
   - Não adicione frameworks pesados ou inflados de IA (como LangChain Python ou orquestradores pesados).
   - Use o **Vercel AI SDK (`ai`)** para tool calling, streaming e conexões de providers.
-- **Hardware do Usuário:** PC com **RTX 4070 Ti (12GB VRAM)**. O modelo padrão é o **Qwen 2.5 7B (Q5_K_M)** rodando localmente via **Ollama** a mais de 80 tok/s.
+- **Hardware do Usuário:** PC com **RTX 4070 Ti (12GB VRAM)**. O modelo padrão recomendado para alta fidelidade em tool calling é o **Qwen 2.5 14B** (ou **Qwen 2.5-Coder 14B**) rodando localmente via **Ollama** a ~40 tok/s. O **Qwen 2.5 7B** permanece como alternativa ultrarrápida (>80 tok/s).
 
 ---
 
@@ -22,7 +22,7 @@ Este documento orienta desenvolvedores e agentes de IA (Antigravity, Claude, Cop
 | **Linguagem** | TypeScript 5.8+ (ES2022, NodeNext) | Tipagem estrita e módulos ESM nativos |
 | **Runtime de Execução** | Node.js 22+ & `tsx` | Execução rápida sem build prévio |
 | **Orquestrador de IA** | Vercel AI SDK (`ai`, `@ai-sdk/openai`, `@ai-sdk/google`) | Streaming, tool calling e structured output |
-| **LLM Local Primária** | Ollama (`http://localhost:11434/v1`) | Qwen 2.5 7B (Q5_K_M) local |
+| **LLM Local Primária** | Ollama (`http://localhost:11434/v1`) | Qwen 2.5 14B / Qwen 2.5-Coder 14B (ou 7B) |
 | **LLM Cloud Fallback** | Google AI Studio Free Tier | Gemini 1.5 Flash (contexto de 1M tokens) |
 | **Sistema de Memória** | Markdown Local (`memory/*.md`) | Memória humana, legível, auditável e editável |
 | **Validação de Schemas**| Zod (`zod`) | Tipagem estrita dos parâmetros das ferramentas |
