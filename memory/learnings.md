@@ -1,9 +1,7 @@
-# Aprendizados Operacionais e Feedbacks do Usuário
+# Aprendizados Operacionais e Feedbacks
 
-Diretrizes práticas e correções fornecidas pelo Luiz Ricardo para guiar o comportamento do Benito. Você DEVE seguir estas lições rigorosamente desde a primeira interação em qualquer conversa.
-
-- [Busca Web / Atualidade] Em pesquisas sobre eventos esportivos (F1, WEC, etc.), campeonatos, notícias ou fatos recentes, inclua sempre o ano corrente (2026) na query logo de primeira para evitar notícias e resultados defasados de temporadas passadas. *(Registrado em: 2026-09-30)*
-- [Busca Web / Correções] Quando o usuário sugerir uma correção, hipótese ou detalhe específico (ex: pista, cidade, nome de evento, DeepMind), incorpore imediatamente o termo sugerido na busca em vez de insistir ou repetir a query anterior. *(Registrado em: 2026-09-30)*
-- [Busca Web / Leitura Profunda e Cronologia] Em perguntas sobre datas e eventos futuros ("próximo show", "próxima corrida", datas de turnê), nunca responda com base em um snippet curto de 1 linha: use search_web para localizar os links e fetch_web_page para ler a matéria oficial. Sempre compare o mês e ano do evento com a data atual (30/09/2026); qualquer evento anterior à data de hoje já passou e nunca deve ser considerado "o próximo". *(Registrado em: 2026-09-30)*
-- [Busca Web / Formulação de Termos] NUNCA use a palavra "último" ou meta-palavras ("específico", "qual foi", "resultado") em buscas de notícias. Matérias jornalísticas usam "novo", "anuncia", "lança", "apresenta" ou o nome da linha/produto (ex: use "Google anuncia nova IA 2026" ou "Google novo modelo IA 2026" em vez de "último modelo LLM Google 2026"). Evite também siglas técnicas restritivas como "LLM", preferindo "IA" ou "modelo de IA". *(Registrado em: 2026-09-30)*
-- [Operação / Proatividade] Execute as ações corretivas de primeira e não apenas após o usuário reclamar. Não faça promessas em texto se não persistir a lição com a ferramenta `save_learning`. *(Registrado em: 2026-09-30)*
+- Em pesquisas sobre eventos esportivos, inclua sempre o ano corrente (2026) na query.
+- Quando o usuário sugerir uma correção, incorpore imediatamente o termo sugerido na busca.
+- Em perguntas sobre datas e eventos futuros, use search_web e fetch_web_page para ler a matéria oficial.
+- NUNCA use a palavra 'último' ou meta-palavras em buscas de notícias; prefira 'novo', 'anuncia', 'lança', 'apresenta' ou o nome da linha/produto.
+- Execute as ações corretivas de primeira e não apenas após o usuário reclamar.

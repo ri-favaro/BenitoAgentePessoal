@@ -66,15 +66,22 @@ BenitoAgentePessoal/
 
 ## 🧠 Como Funciona o Sistema de Memória
 
-A memória do Benito é dividida em duas camadas:
+A memória do Benito é dividida em três camadas cognitivas com suporte a modularidade e consolidação de longo prazo:
 
-1. **Memória de Curto Prazo (RAM):**
+1. **Memória de Curto Prazo (RAM / Working Memory):**
    * O array `messages: CoreMessage[]` mantido em memória dentro da classe `PersonalAgent` durante a execução da CLI. É limpo quando o usuário usa `/limpar` ou encerra o processo com `/sair`.
-2. **Memória de Longo Prazo (Disco / Markdown):**
+2. **Memória de Longo Prazo Principal (Disco / Markdown):**
    * **`memory/profile.md`:** Guarda informações biográficas sobre o Luiz Ricardo, suas tecnologias favoritas, notas de projetos e preferências aprendidas via ferramenta `save_memory`.
    * **`memory/rules.md`:** Guarda as diretrizes comportamentais, o nome oficial (Benito) e o tom de voz. Atualizado via ferramenta `update_persona`.
-   * **`memory/learnings.md`:** Guarda lições aprendidas, feedbacks corretivos e regras procedurais ensinadas pelo usuário (ex: incluir ano corrente em buscas de esportes). Atualizado via ferramenta `save_learning`.
-   * **Montagem do Contexto & Âncora Temporal:** A cada mensagem, o `MemoryManager.buildSystemPrompt()` lê os arquivos atualizados do disco e injeta dinamicamente a data e ano atuais (`Data de hoje: ... | Ano corrente: 2026`) com instruções para ancoragem de buscas em tempo real.
+   * **`memory/learnings.md`:** Guarda lições aprendidas, feedbacks corretivos e regras procedurais transversais gerais ensinadas pelo usuário. Atualizado via ferramenta `save_learning`.
+   * **Montagem do Contexto & Âncora Temporal com Relógio:** A cada mensagem, o `MemoryManager.buildSystemPrompt()` lê os arquivos atualizados do disco e injeta dinamicamente a data, ano e **horário atual do sistema** (`quarta-feira, 30 de setembro de 2026 às 22:54`), impedindo que o agente deduza horas a partir da internet.
+3. **Memória Modular Especializada por Tópicos (`memory/topics/*.md`):**
+   * Subpasta com arquivos dedicados por domínio (ex: `web-search.md`, `sports.md`, `coding.md`).
+   * Mantém o prompt enxuto e escalável: em vez de injetar dezenas de regras específicas no prompt principal, o agente carrega apenas um índice compacto com 1 linha por tópico (`readAllTopicsIndex()`).
+   * Ferramentas dedicadas: `read_topic_memory`, `save_topic_learning` e `list_memory_topics`.
+4. **Ciclo de Consolidação de Memória (`/consolidar`):**
+   * Inspirado no *Memory Sleep Cycle* de agentes SOTA (MemGPT / Letta, Generative Agents):
+   * O método `MemoryManager.consolidateMemory()` analisa a memória bruta, remove duplicatas, resolve contradições, agrupa regras específicas em subpastas por tópicos e sintetiza `learnings.md` e `profile.md` em diretrizes mestras compactas.
 
 ---
 

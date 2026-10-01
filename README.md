@@ -116,7 +116,10 @@ npm run dev
 
 - `/memoria` — Mostra o que o Benito lembra sobre você (`memory/profile.md`).
 - `/regras` — Exibe a identidade, regras e diretrizes ativas (`memory/rules.md`).
-- `/aprendizados` — Exibe as lições aprendidas e feedbacks operacionais persistidos (`memory/learnings.md`).
+- `/aprendizados` — Exibe as lições aprendidas e feedbacks operacionais gerais (`memory/learnings.md`).
+- `/topicos` — Lista todos os tópicos de memória modular especializada (`memory/topics/`).
+- `/topico <nome>` — Exibe o conteúdo de um tópico específico (ex: `/topico web-search`).
+- `/consolidar` — Executa o ciclo de sono/consolidação: desduplica fatos, resolve conflitos e sintetiza regras em subpastas por tópicos.
 - `/limpar` — Reseta a conversa atual sem perder a memória persistente.
 - `/sair` — Encerra o assistente.
 - `/ajuda` — Exibe os comandos disponíveis.

@@ -69,5 +69,65 @@ export function createMemoryTools(memoryManager: MemoryManager) {
         return { success: true, message };
       },
     }),
+
+    read_topic_memory: tool({
+      description:
+        "Lê o conteúdo completo de um tópico de memória especializada em memory/topics/ (ex: 'web-search', 'coding', 'sports'). Use quando a conversa exigir diretrizes ou regras aprofundadas de um domínio específico.",
+      parameters: z.object({
+        topicSlug: z
+          .string()
+          .describe("O identificador/slug do tópico (ex: 'web-search', 'sports', 'coding')."),
+      }),
+      execute: async ({ topicSlug }) => {
+        const content = await memoryManager.readTopic(topicSlug);
+        if (!content) {
+          return {
+            success: false,
+            message: `Tópico '${topicSlug}' não encontrado na pasta memory/topics/.`,
+          };
+        }
+        return { success: true, topicSlug, content };
+      },
+    }),
+
+    save_topic_learning: tool({
+      description:
+        "Salva uma regra prática ou aprendizado operacional diretamente dentro de um arquivo de tópico especializado em memory/topics/<slug>.md (ex: 'web-search', 'sports', 'coding'). Use para manter a memória limpa e modularizada por domínio.",
+      parameters: z.object({
+        topicSlug: z
+          .string()
+          .describe("Slug do domínio/tópico em minúsculas sem espaços (ex: 'web-search', 'sports', 'coding')."),
+        lesson: z
+          .string()
+          .describe("A regra, procedimento ou lição a ser registrada para este tópico específico."),
+        title: z
+          .string()
+          .optional()
+          .describe("Título amigável para o tópico caso ele ainda não exista (ex: 'Busca Web e Pesquisa')."),
+        description: z
+          .string()
+          .optional()
+          .describe("Breve descrição do propósito deste tópico se for novo."),
+      }),
+      execute: async ({ topicSlug, lesson, title, description }) => {
+        const message = await memoryManager.saveTopicLearning(
+          topicSlug,
+          lesson,
+          title,
+          description
+        );
+        return { success: true, message };
+      },
+    }),
+
+    list_memory_topics: tool({
+      description:
+        "Lista todos os tópicos de memória especializada disponíveis na pasta memory/topics/, com seus resumos e quantidade de regras ativas.",
+      parameters: z.object({}),
+      execute: async () => {
+        const topics = await memoryManager.listTopics();
+        return { success: true, topics };
+      },
+    }),
   };
 }
