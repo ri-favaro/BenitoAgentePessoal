@@ -101,6 +101,29 @@ async function runTests() {
     process.exit(1);
   }
 
+  // Teste 5: Desarme da armadilha de termos (query com 'último modelo LLM Google 2026' deve encontrar Argon)
+  console.log(
+    pc.yellow(
+      "5. Testando desarme da armadilha de termos ('último modelo LLM Google 2026')..."
+    )
+  );
+  const argonResult = await tools.search_web.execute(
+    { query: "último modelo LLM Google 2026", numResults: 5 },
+    { messages: [], toolCallId: "test-argon" }
+  );
+
+  if (
+    argonResult.success &&
+    argonResult.summary?.toLowerCase().includes("argon")
+  ) {
+    console.log(
+      pc.green("✔ Armadilha desarmada: query sanitizada encontrou 'Gemini 4 Argon'!\n")
+    );
+  } else {
+    console.error(pc.red("✖ Falha ao encontrar Argon:"), argonResult.summary);
+    process.exit(1);
+  }
+
   console.log(pc.bold(pc.green("Todos os testes passaram com sucesso! 🚀\n")));
 }
 

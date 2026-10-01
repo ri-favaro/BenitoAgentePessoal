@@ -24,6 +24,23 @@ export interface SearxngResponse {
   infoboxes?: SearxngInfobox[];
 }
 
+export function sanitizeSearchQuery(rawQuery: string): string {
+  let q = rawQuery.trim();
+  // Substitui "último modelo", "última corrida", "último lançamento" por termos que indexam notícias reais
+  q = q.replace(
+    /\b[uú]ltim[oa]s?\s+(modelo|vers[aã]o|lan[cç]amento|update|atualiza[cç][aã]o)\b/gi,
+    "novo $1"
+  );
+  q = q.replace(/(^|\s)[uú]ltim[oa]s?(\s|$)/gi, " novo ");
+  // Remove palavras de ruído que poluem a busca
+  q = q.replace(/\b(espec[íi]fic[oa]s?|detalhes|exat[oa]s?|qual foi|onde foi)\b/gi, "");
+  // Se contiver LLM e uma empresa de tecnologia, expande/substitui por "IA"
+  if (/\bLLM\b/i.test(q) && /(google|openai|anthropic|meta|deepmind|microsoft)/i.test(q)) {
+    q = q.replace(/\bLLM\b/gi, "IA");
+  }
+  return q.replace(/\s+/g, " ").trim();
+}
+
 export function formatSearchResults(data: SearxngResponse, limit: number): string {
   const sections: string[] = [];
 
@@ -73,12 +90,12 @@ export function createWebTools() {
   return {
     search_web: tool({
       description:
-        "Realiza buscas na internet em tempo real via metabuscador local SearXNG. Utilize para encontrar fatos atuais, notícias recentes, eventos esportivos, documentações e datas precisas. Sempre formule termos de busca diretos e objetivos.",
+        "Realiza buscas na internet em tempo real via metabuscador local SearXNG. Utilize para encontrar fatos atuais, lançamentos de IA, notícias recentes, eventos esportivos e datas. IMPORTANTE: Use termos diretos como 'Google anuncia nova IA 2026' ou 'Google novo modelo IA 2026' em vez de palavras conversacionais.",
       parameters: z.object({
         query: z
           .string()
           .describe(
-            "Termos de busca objetivos com palavras-chave relevantes (ex: '\"Peugeot 9X8\" WEC Fuji' ou 'Node.js 22 novidades'). Evite perguntas longas."
+            "Termos de busca objetivos. Evite a palavra 'último' ou jargões restritivos como 'LLM' (prefira 'novo modelo IA', 'anuncia', 'Gemini', etc.)."
           ),
         numResults: z
           .number()
@@ -101,8 +118,9 @@ export function createWebTools() {
       }),
       execute: async ({ query, numResults = 5, categories = "general,news", language }) => {
         try {
+          const effectiveQuery = sanitizeSearchQuery(query);
           const url = new URL("/search", config.searxng.baseUrl);
-          url.searchParams.set("q", query);
+          url.searchParams.set("q", effectiveQuery);
           url.searchParams.set("format", "json");
           if (categories) {
             url.searchParams.set("categories", categories);
@@ -130,7 +148,8 @@ export function createWebTools() {
 
           return {
             success: true,
-            query,
+            query: effectiveQuery,
+            originalQuery: query !== effectiveQuery ? query : undefined,
             totalFound: data.results?.length || 0,
             resultsCount: Math.min(data.results?.length || 0, numResults),
             summary,
