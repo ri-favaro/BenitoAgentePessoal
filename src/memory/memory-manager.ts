@@ -6,11 +6,13 @@ export class MemoryManager {
   private memoryDir: string;
   private profilePath: string;
   private rulesPath: string;
+  private learningsPath: string;
 
   constructor(memoryDir: string = config.memoryDir) {
     this.memoryDir = memoryDir;
     this.profilePath = path.join(this.memoryDir, "profile.md");
     this.rulesPath = path.join(this.memoryDir, "rules.md");
+    this.learningsPath = path.join(this.memoryDir, "learnings.md");
   }
 
   async init(): Promise<void> {
@@ -30,6 +32,14 @@ export class MemoryManager {
       return await fs.readFile(this.rulesPath, "utf-8");
     } catch {
       return "# Diretrizes\n\nVocê é o **Benito**, um assistente pessoal útil e conciso.";
+    }
+  }
+
+  async readLearnings(): Promise<string> {
+    try {
+      return await fs.readFile(this.learningsPath, "utf-8");
+    } catch {
+      return "# Aprendizados Operacionais e Feedbacks\n\nNenhuma lição operacional registrada ainda.";
     }
   }
 
@@ -113,20 +123,55 @@ export class MemoryManager {
     }
   }
 
+  async saveLearning(lesson: string, category?: string): Promise<string> {
+    await this.init();
+    const timestamp = new Date().toISOString().split("T")[0];
+    const categoryTag = category ? `[${category}] ` : "";
+    const entry = `\n- ${categoryTag}${lesson} *(Registrado em: ${timestamp})*`;
+
+    try {
+      let content = await this.readLearnings();
+      content += entry;
+      await fs.writeFile(this.learningsPath, content, "utf-8");
+      return `Aprendizado operacional gravado com sucesso na memória persistente: "${lesson}"`;
+    } catch (error) {
+      const errMessage = error instanceof Error ? error.message : String(error);
+      return `Erro ao salvar aprendizado operacional: ${errMessage}`;
+    }
+  }
+
   async buildSystemPrompt(): Promise<string> {
-    const [rules, profile] = await Promise.all([
+    const [rules, profile, learnings] = await Promise.all([
       this.readRules(),
       this.readProfile(),
+      this.readLearnings(),
     ]);
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const currentYear = now.getFullYear();
 
     return `
 ${rules}
 
 ---
-# CONTEXTO E MEMÓRIA PERSISTENTE DO USUÁRIO
-${profile}
+# APRENDIZADOS OPERACIONAIS & FEEDBACKS DO USUÁRIO (SEGUI-LOS RIGOROSAMENTE)
+${learnings}
+
 ---
-Data e hora atual do sistema: ${new Date().toLocaleString("pt-BR")}
+# CONTEXTO E MEMÓRIA PERSISTENTE DO USUÁRIO (LUIZ RICARDO)
+${profile}
+
+---
+# ÂNCORA TEMPORAL OBRIGATÓRIA DO SISTEMA
+- Data de hoje: ${formattedDate}
+- Ano corrente: ${currentYear}
+- DIRETRIZ TEMPORAL: O ano atual é ${currentYear}. Para qualquer pergunta sobre "último(a)", "recente", "resultado", eventos esportivos (F1, WEC, etc.) ou lançamentos, assuma que estamos em ${currentYear} e SEMPRE inclua "${currentYear}" na sua busca web de primeira!
 `.trim();
   }
 }

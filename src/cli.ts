@@ -26,7 +26,7 @@ async function main() {
   console.log(pc.gray(`• Memória: `) + pc.magenta(config.memoryDir));
   console.log(pc.gray(`• Busca Web: `) + pc.blue(`SearXNG (${config.searxng.baseUrl})`));
   console.log(pc.gray("--------------------------------------------------"));
-  console.log(pc.dim("Comandos especiais: /memoria, /regras, /limpar, /sair, /ajuda"));
+  console.log(pc.dim("Comandos especiais: /memoria, /regras, /aprendizados, /limpar, /sair, /ajuda"));
   console.log("");
   while (true) {
     let userInput: string;
@@ -69,12 +69,21 @@ async function main() {
         continue;
       }
 
+      if (trimmed === "/aprendizados") {
+        const learnings = await agent.memoryManager.readLearnings();
+        console.log(pc.cyan("\n--- APRENDIZADOS E FEEDBACKS OPERACIONAIS ---"));
+        console.log(learnings);
+        console.log(pc.cyan("---------------------------------------------\n"));
+        continue;
+      }
+
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
-        console.log(pc.bold("  /memoria ") + "- Exibe o perfil e notas salvas sobre você");
-        console.log(pc.bold("  /regras  ") + "- Exibe o nome e diretrizes ativas do agente");
-        console.log(pc.bold("  /limpar  ") + "- Limpa a sessão de contexto atual");
-        console.log(pc.bold("  /sair    ") + "- Encerra o assistente\n");
+        console.log(pc.bold("  /memoria      ") + "- Exibe o perfil e notas salvas sobre você");
+        console.log(pc.bold("  /regras       ") + "- Exibe o nome e diretrizes ativas do agente");
+        console.log(pc.bold("  /aprendizados ") + "- Exibe as lições aprendidas e feedbacks operacionais gravados");
+        console.log(pc.bold("  /limpar       ") + "- Limpa a sessão de contexto atual");
+        console.log(pc.bold("  /sair         ") + "- Encerra o assistente\n");
         continue;
       }
 
@@ -91,6 +100,11 @@ async function main() {
             const fact = (args as { fact?: string })?.fact || "";
             process.stdout.write(
               pc.dim(pc.yellow(`\n[🧠 Memória: salvando "${fact}"]\n${agentName}: `))
+            );
+          } else if (toolName === "save_learning") {
+            const lesson = (args as { lesson?: string })?.lesson || "";
+            process.stdout.write(
+              pc.dim(pc.green(`\n[💡 Aprendizado: salvando lição "${lesson}"]\n${agentName}: `))
             );
           } else if (toolName === "update_persona") {
             const newName = (args as { newName?: string })?.newName;

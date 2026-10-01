@@ -43,7 +43,8 @@ BenitoAgentePessoal/
 │   └── settings.yml          # Configurações do SearXNG (JSON API)
 ├── memory/
 │   ├── profile.md            # Perfil do Luiz Ricardo (stack, hardware, fatos aprendidos)
-│   └── rules.md              # Identidade do Benito, diretrizes de resposta e honestidade
+│   ├── rules.md              # Identidade do Benito, diretrizes de resposta e honestidade
+│   └── learnings.md          # Lições aprendidas e feedbacks operacionais persistidos
 ├── tests/
 │   └── test-search.ts        # Testes de integração da busca web e tratamento offline
 └── src/
@@ -57,7 +58,7 @@ BenitoAgentePessoal/
     └── tools/
         ├── index.ts          # Registro central onde todas as tools são expostas
         ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (ex: Obsidian)
-        ├── memory-tools.ts   # Gravação de fatos (profile) e atualização de persona (rules)
+        ├── memory-tools.ts   # Gravação de fatos (profile), aprendizados (learnings) e persona (rules)
         └── web-tools.ts      # Ferramenta de busca web em tempo real (SearXNG)
 ```
 
@@ -70,9 +71,10 @@ A memória do Benito é dividida em duas camadas:
 1. **Memória de Curto Prazo (RAM):**
    * O array `messages: CoreMessage[]` mantido em memória dentro da classe `PersonalAgent` durante a execução da CLI. É limpo quando o usuário usa `/limpar` ou encerra o processo com `/sair`.
 2. **Memória de Longo Prazo (Disco / Markdown):**
-   * **`memory/profile.md`:** Guarda informações biográficas sobre o Luiz Ricardo, suas tecnologias favoritas, notas de projetos e novos fatos que o Benito aprende via ferramenta `save_memory`.
+   * **`memory/profile.md`:** Guarda informações biográficas sobre o Luiz Ricardo, suas tecnologias favoritas, notas de projetos e preferências aprendidas via ferramenta `save_memory`.
    * **`memory/rules.md`:** Guarda as diretrizes comportamentais, o nome oficial (Benito) e o tom de voz. Atualizado via ferramenta `update_persona`.
-   * **Montagem do Contexto:** A cada mensagem, o `MemoryManager.buildSystemPrompt()` lê os arquivos atualizados do disco e injeta como `system prompt` na LLM.
+   * **`memory/learnings.md`:** Guarda lições aprendidas, feedbacks corretivos e regras procedurais ensinadas pelo usuário (ex: incluir ano corrente em buscas de esportes). Atualizado via ferramenta `save_learning`.
+   * **Montagem do Contexto & Âncora Temporal:** A cada mensagem, o `MemoryManager.buildSystemPrompt()` lê os arquivos atualizados do disco e injeta dinamicamente a data e ano atuais (`Data de hoje: ... | Ano corrente: 2026`) com instruções para ancoragem de buscas em tempo real.
 
 ---
 

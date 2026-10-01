@@ -25,7 +25,8 @@ BenitoAgentePessoal/
 │   └── settings.yml          # Configuração do SearXNG (JSON API habilitada)
 ├── memory/
 │   ├── profile.md            # Perfil do usuário (gostos, stack, hardware, fatos aprendidos)
-│   └── rules.md              # Identidade ativa (Benito), tom de voz e regras operacionais
+│   ├── rules.md              # Identidade ativa (Benito), tom de voz e regras operacionais
+│   └── learnings.md          # Lições aprendidas e feedbacks operacionais persistidos
 ├── tests/
 │   └── test-search.ts        # Script de validação da busca web (SearXNG)
 ├── src/
@@ -115,6 +116,7 @@ npm run dev
 
 - `/memoria` — Mostra o que o Benito lembra sobre você (`memory/profile.md`).
 - `/regras` — Exibe a identidade, regras e diretrizes ativas (`memory/rules.md`).
+- `/aprendizados` — Exibe as lições aprendidas e feedbacks operacionais persistidos (`memory/learnings.md`).
 - `/limpar` — Reseta a conversa atual sem perder a memória persistente.
 - `/sair` — Encerra o assistente.
 - `/ajuda` — Exibe os comandos disponíveis.
