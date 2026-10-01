@@ -1,10 +1,23 @@
 # Tópico: Busca Web e Pesquisa Online
-Descrição: Diretrizes e estratégias para busca e leitura profunda
+Descrição: Diretrizes universais e estratégias para busca e leitura profunda
 
-- Em pesquisas sobre eventos esportivos, inclua sempre o ano corrente (2026) na query.
+- REGRA UNIVERSAL DE IDIOMA: Para qualquer assunto técnico, programação, documentação, benchmarks de hardware/GPU, ciência, jogos/simuladores, cultura pop global, esportes internacionais ou dados numéricos/específicos, formule a busca prioritariamente em INGLÊS (onde reside a vasta maioria dos dados e documentação da internet). Leia a fonte em inglês e traga a resposta final traduzida e estruturada em Português do Brasil. Use buscas em português APENAS quando o assunto for de natureza estritamente regional/local do Brasil (leis brasileiras, cidades, preços locais).
+- BUSCA FACTUAL POR PALAVRAS-CHAVE: Em motores de busca (SearXNG/Google), formule queries utilizando palavras-chave diretas, substantivos e entidades (ex: 'FIA Formula 2 race results 2026', 'Amazon Kindle launch 2026', 'RTX 4070 Ti benchmarks'). Evite formular perguntas conversacionais prolixas ou frases completas (ex: 'onde foi a corrida e qual a data').
+- SUBSTANTIVOS FACTUAIS VS TERMOS CONVERSACIONAIS: Notícias e artigos da internet são indexados por desfechos factuais ('results', 'winner', 'standings', 'schedule', 'calendar', 'release', 'specs'), e NUNCA por palavras conversacionais de pergunta ('location', 'date', 'where', 'when', 'last'). Para descobrir onde ocorreu uma corrida ou evento, busque pelo resultado ou vencedor da corrida (ex: 'Formula 2 race results 2026' ou 'Formula 2 recent race winner'), pois toda matéria de resultados cita a cidade e o circuito. NUNCA use termos vagos como 'race location'.
+- EXPANSÃO OBRIGATÓRIA DE SIGLAS CURTAS: Siglas de 2 a 3 letras (ex: 'F2', 'FE', 'WEC', 'LMU') colidem frequentemente com teclas, dicionários ou produtos não relacionados. Ao buscar, expanda sempre a sigla por extenso ('Formula 2', 'Formula E', 'World Endurance Championship', 'Le Mans Ultimate').
+- REGRA DO PIVOT COGNITIVO (ANTI-THRASHING): Se uma busca retornar resultados irrelevantes (dicionários, letras de música, sites não relacionados), NUNCA repita a busca apenas trocando sinônimos superficiais (como mudar 'last' para 'latest' ou reordenar palavras). Execute um Pivot imediato:
+  1. Expanda siglas por extenso.
+  2. Mude a dimensão da busca de termos vagos ('location') para substantivos factuais ('results', 'standings', 'winner').
+  3. Se um snippet citar uma pista ou cidade candidata (ex: 'Baku' ou 'Monza'), NÃO volte a fazer buscas genéricas: aprofunde imediatamente nessa pista específica (ex: 'Formula 2 Baku 2026 results') ou abra o link com fetch_web_page.
+- Em pesquisas esportivas com temporadas bianuais ou contínuas (ex: Fórmula E, futebol europeu, NBA), se o ano atual não trouxer eventos concluídos, NUNCA force anos futuros. Remova o ano e busque pelos resultados mais recentes da categoria ('latest season calendar results').
+- PROTOCOLO SEARCH ➔ FETCH PARA AGENDAS E TURNÊS: Para perguntas sobre datas de shows, turnês, calendários ou itinerários, os snippets de busca são resumos curtos que omitem dias exatos ou trazem eventos paralelos (ex: filmes). Invoque OBRIGATORIAMENTE fetch_web_page na URL da matéria ou anúncio da turnê para ler a tabela real de datas e cidades antes de responder.
+- NUNCA ALUCINE DIAS: Se um snippet disser apenas o mês (ex: "em outubro"), você NÃO sabe o dia exato. É terminantemente proibido inventar dias fictícios. Leia a página real com fetch_web_page.
+- PROIBIÇÃO DE EVASIVIDADE: NUNCA responda dizendo "verifique no site oficial" ou "consulte a página de vendas". Você tem ferramentas de busca e leitura profunda: abra os links e entregue os dados completos ao usuário.
+- REGRA DO PRÓXIMO EVENTO (FUTURO ESTRITO): A data de qualquer evento qualificado como "próximo" DEVE ser maior que a data de hoje do sistema. Eventos que ocorreram em datas anteriores pertencem ao passado e nunca podem ser apresentados como o próximo evento.
+- DIFERENCIAÇÃO SEMÂNTICA (SHOW AO VIVO VS CINEMA): Show/concerto de uma banda se refere a apresentações musicais presenciais ao vivo em estádios/arenas, e não exibições gravadas em salas de cinema.
+- NUNCA invente, deduza ou adivinhe URLs da sua imaginação para fetch_web_page. Passe exclusivamente URLs reais que constam nos resultados retornados por search_web.
+- NUNCA chame fetch_web_page na mesma URL consecutivamente se ela já falhou ou já foi lida. Se a informação não estava lá na primeira leitura, formule nova busca no search_web com termos em inglês mais direcionados.
+- NUNCA envie respostas prometendo 'vou pesquisar' ou 'vou ler' sem acionar a ferramenta correspondente imediatamente no mesmo turno.
 - Quando o usuário sugerir uma correção, incorpore imediatamente o termo sugerido na busca.
-- Em perguntas sobre datas e eventos futuros, use search_web e fetch_web_page para ler a matéria oficial.
-- NUNCA use a palavra 'último' ou meta-palavras em buscas de notícias; prefira 'novo', 'anuncia', 'lança', 'apresenta' ou o nome da linha/produto.
-- Para esportes internacionais (WEC, Le Mans, F1) ou dados técnicos específicos (tempos de volta, telemetria), formule buscas em inglês quando fontes em português forem vagas, e traga a resposta final traduzida em Português do Brasil.
-- NUNCA envie respostas prometendo "vou pesquisar" ou "vou ler" sem acionar a ferramenta correspondente imediatamente no mesmo turno.
-- NUNCA chame fetch_web_page na mesma URL consecutivamente. Se a informação não estava lá na primeira leitura, formule nova busca ou selecione outro link.
+- RACIOCÍNIO CRONOLÓGICO: Ao listar ou responder sobre datas, turnês ou eventos futuros, ordene estritamente do menor para o maior (dia 1 -> dia 2 -> dia 7). NUNCA afirme que uma data menor ocorre após uma data maior no mesmo mês.
+- COMPLETUDE: Se a pergunta tiver múltiplos itens (ex: local, tempo de classificação e tempo de corrida), certifique-se de responder a todos eles explicitamente.

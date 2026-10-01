@@ -147,6 +147,65 @@ async function runMemoryTests() {
       throw new Error(`Falha na consolidação: ${consolidationResult.summary}`);
     }
 
+    // Teste 6: Consolidação com histórico de sessão ativa
+    console.log(pc.yellow("\n6. Testando consolidação com histórico de sessão ativa (sessionHistory)..."));
+    let capturedPrompt = "";
+    const mockModelWithHistory: any = {
+      specificationVersion: "v1",
+      modelId: "mock-model-history",
+      provider: "mock",
+      defaultObjectGenerationMode: "json",
+      doGenerate: async (options: any) => {
+        capturedPrompt = JSON.stringify(options.prompt);
+        return {
+          text: JSON.stringify({
+            consolidatedLearnings:
+              "# Aprendizados Operacionais Mestres\n\n- [Comportamento] Direto e conciso.",
+            consolidatedProfile:
+              "# Perfil do Usuário\n\n- Nome: Luiz Ricardo\n- Hardware: RTX 4070 Ti\n\n## Ideias e Projetos\n- Integração com GitHub para criar issues de auto-melhoria.",
+            topics: [
+              {
+                slug: "github",
+                title: "Integração GitHub",
+                description: "Diretrizes para automação e abertura de issues",
+                rules: [
+                  "Sempre peça autorização antes de criar uma issue no repositório.",
+                ],
+              },
+            ],
+            summary: "Extraído da sessão o plano de integrar tool do GitHub e criado tópico especializado github.",
+          }),
+          finishReason: "stop",
+          usage: { promptTokens: 120, completionTokens: 60 },
+          rawCall: {},
+        };
+      },
+    };
+
+    const sessionHistory: any = [
+      { role: "user", content: "Qual outra ferramenta você queria ter acesso?" },
+      { role: "assistant", content: "Poderíamos ter uma ferramenta do GitHub." },
+      { role: "user", content: "Boa! Aí você abre issues com sugestões de melhorias." },
+    ];
+
+    const resultWithHistory = await memoryManager.consolidateMemory(mockModelWithHistory, sessionHistory);
+    if (
+      resultWithHistory.success &&
+      capturedPrompt.includes("Qual outra ferramenta você queria ter acesso?") &&
+      capturedPrompt.includes("Boa! Aí você abre issues com sugestões de melhorias.")
+    ) {
+      console.log(pc.green("✔ Histórico da sessão foi devidamente injetado no prompt de consolidação!"));
+      const updatedProfile = await memoryManager.readProfile();
+      const githubTopic = await memoryManager.readTopic("github");
+      if (updatedProfile.includes("Integração com GitHub") && githubTopic?.includes("Sempre peça autorização")) {
+        console.log(pc.green("✔ Dados da sessão foram consolidados em profile.md e memory/topics/github.md!"));
+      } else {
+        throw new Error("Dados da sessão não foram refletidos nos arquivos.");
+      }
+    } else {
+      throw new Error("Falha na consolidação com histórico: prompt incompleto ou erro.");
+    }
+
     console.log(pc.bold(pc.green("\nTodos os testes de memória passaram com sucesso! 🚀\n")));
   } finally {
     // Limpeza da pasta temporária de teste

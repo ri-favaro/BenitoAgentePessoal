@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { generateText, type LanguageModel } from "ai";
+import { generateText, type LanguageModel, type CoreMessage } from "ai";
 import { config } from "../config.js";
 import { getLanguageModel } from "../core/llm.js";
 
@@ -263,8 +263,55 @@ export class MemoryManager {
     throw new Error("Não foi possível decodificar JSON retornado pelo modelo.");
   }
 
+  private formatSessionHistory(history?: CoreMessage[]): string {
+    if (!history || history.length === 0) {
+      return "Nenhum histórico de conversa recente nesta sessão.";
+    }
+
+    const lines: string[] = [];
+    for (const msg of history) {
+      if (msg.role === "system") continue;
+
+      let textContent = "";
+      if (typeof msg.content === "string") {
+        textContent = msg.content;
+      } else if (Array.isArray(msg.content)) {
+        textContent = msg.content
+          .map((part: any) => {
+            if (part && typeof part === "object") {
+              if (typeof part.text === "string") return part.text;
+              if (part.type === "tool-call") {
+                return `[Ação solicitada: ${part.toolName}]`;
+              }
+            }
+            return "";
+          })
+          .filter(Boolean)
+          .join(" ");
+      }
+
+      // Remover eventuais instruções internas injetadas no histórico
+      if (textContent.includes("[Instrução do Sistema:")) {
+        textContent = textContent.replace(/\[Instrução do Sistema:[^\]]+\]/g, "").trim();
+      }
+
+      if (!textContent.trim()) continue;
+
+      const speaker = msg.role === "user" ? "Luiz Ricardo (Usuário)" : "Benito (Agente)";
+      lines.push(`${speaker}: ${textContent.trim()}`);
+    }
+
+    if (lines.length === 0) {
+      return "Nenhum diálogo relevante na sessão recente.";
+    }
+
+    // Mantém até as últimas 25 mensagens para equilibrar riqueza de contexto e tokens
+    return lines.slice(-25).join("\n\n");
+  }
+
   async consolidateMemory(
-    customModel?: LanguageModel
+    customModel?: LanguageModel,
+    sessionHistory?: CoreMessage[]
   ): Promise<{ success: boolean; summary: string }> {
     await this.init();
     try {
@@ -284,44 +331,64 @@ export class MemoryManager {
         existingTopicsText = "Nenhum tópico existente ainda.";
       }
 
+      const formattedSession = this.formatSessionHistory(sessionHistory);
+
       const prompt = `
 Você é o Módulo Especialista de Consolidação e Arquitetura de Memória do Benito (assistente pessoal do Luiz Ricardo).
 
-Seu objetivo é organizar, sintetizar, desduplicar e modularizar a memória de longo prazo do agente para que o prompt permaneça ultraleve, modular e eficiente ao longo do tempo.
+Seu objetivo é:
+1. Analisar a CONVERSA DA SESSÃO ATUAL (se houver histórico abaixo) para identificar novos fatos biográficos, preferências, stacks, ideias de projetos, decisões técnicas ou aprendizados operacionais discutidos.
+2. Integrar essas novidades à MEMÓRIA EXISTENTE EM DISCO, desduplicando, sintetizando e organizando tudo de forma modular em tópicos especializados.
+3. Se a conversa não trouxe nenhuma informação de longo prazo relevante, preserve os dados existentes e relate isso com precisão no resumo.
 
-### MEMÓRIA ATUAL DO AGENTE:
+---
+### CONVERSA DA SESSÃO ATUAL:
+${formattedSession}
+
+---
+### MEMÓRIA ATUAL EM DISCO:
 
 === PERFIL DO USUÁRIO (profile.md) ===
 ${profile}
 
-=== APRENDIZADOS OPERACIONAIS BRUTOS (learnings.md) ===
+=== APRENDIZADOS OPERACIONAIS GERAIS (learnings.md) ===
 ${learnings}
 
 === TÓPICOS MODULARES EXISTENTES (topics/*.md) ===
 ${existingTopicsText}
 
 ---
-### SUAS INSTRUÇÕES DE ARQUITETURA:
-1. **Modularização por Tópicos Especializados (Subpastas memory/topics/<slug>.md):**
-   - Extraia e mova aprendizados e regras específicas para tópicos modulares por domínio.
-   - Exemplos de tópicos essenciais:
-     - "web-search": regras e estratégias de busca no SearXNG, desarme de armadilhas de termos ("último", "LLM"), categorias e leitura profunda com fetch_web_page.
-     - "sports": regras específicas de cronologia esportiva (F1, WEC, campeonatos, incluir ano corrente).
-     - "coding": preferências de arquitetura, TypeScript, Node.js e engenharia limpa.
+### SUAS DIRETRIZES DE CONSOLIDAÇÃO:
+1. **Extração Inteligente da Conversa:**
+   - Extraia planos, ideias discutidas (como novas ferramentas para o Benito, automações, GitHub, etc.), decisões arquiteturais e preferências do Luiz Ricardo.
+   - Atualize 'consolidatedProfile' refletindo novos fatos, preferências ou projetos em andamento/planejados.
+   - Extraia regras operacionais ou diretrizes de execução e as direcione para o tópico apropriado ou para os aprendizados gerais.
+
+2. **Modularização por Tópicos Especializados (Subpastas memory/topics/<slug>.md):**
+   - Agrupe regras técnicas e diretrizes por domínio (ex: 'web-search', 'sports', 'coding', 'github', etc.).
+   - Você pode criar novos tópicos se o diálogo trouxer regras para novos domínios (ex: 'github' para regras de issues/repositório).
+   - PRESERVE os tópicos e regras válidas já existentes, a menos que tenham sido revogadas.
    - Cada tópico no array deve conter:
-     - "slug": identificador em minúsculas com hífens (ex: "web-search")
-     - "title": título amigável (ex: "Busca Web e Pesquisa Online")
-     - "description": 1 linha resumindo as diretrizes deste tópico
-     - "rules": array de strings com as regras consolidadas do tópico (sem repetições).
+     - "slug": identificador em minúsculas com hífens (ex: "web-search", "github")
+     - "title": título amigável (ex: "Busca Web", "Integração GitHub")
+     - "description": 1 linha com o propósito do tópico
+     - "rules": array de strings com as diretrizes consolidadas do tópico (sem duplicatas).
 
-2. **Sintetização de Aprendizados Gerais (memory/learnings.md):**
-   - Mantenha em 'consolidatedLearnings' APENAS diretrizes transversais gerais de comportamento e operação que se aplicam a qualquer conversa (máximo 4 a 6 itens mestres).
-   - Não repita aqui o que já foi modularizado dentro de tópicos específicos.
+3. **Sintetização de Aprendizados Gerais (memory/learnings.md):**
+   - Mantenha em 'consolidatedLearnings' APENAS diretrizes transversais gerais de comportamento e tom de voz que se aplicam a toda conversa (máximo 4 a 6 itens mestres).
+   - Não repita aqui o que já estiver modularizado dentro de tópicos específicos.
 
-3. **Consolidação do Perfil (memory/profile.md):**
-   - Elimine fatos duplicados sobre o Luiz Ricardo, organize em seções lógicas e mantenha limpo.
+4. **Consolidação do Perfil (memory/profile.md):**
+   - Mantenha organizado por seções claras (# Perfil do Usuário, ## Preferências, ## Projetos Atuais e Ideias).
+   - Elimine dados redundantes e mantenha formatação Markdown limpa.
 
-4. **FORMATO OBRIGATÓRIO DE RESPOSTA:**
+5. **Resumo da Consolidação (summary):**
+   - Responda com um resumo REAL, DINÂMICO e ESPECÍFICO em português brasileiro.
+   - Se houve novidades aprendidas na conversa recente, cite EXATAMENTE o que foi registrado (ex.: "Registrado no perfil a ideia de adicionar ferramenta do GitHub para abertura autônoma de issues...").
+   - Se nenhuma nova informação foi identificada na conversa, declare claramente que a memória existente foi revisada e mantida íntegra.
+   - NUNCA retorne um texto fixo ou genérico.
+
+6. **FORMATO OBRIGATÓRIO DE RESPOSTA:**
    Responda EXCLUSIVAMENTE com um objeto JSON válido no formato abaixo, sem texto antes ou depois:
 {
   "consolidatedLearnings": "# Aprendizados Operacionais e Feedbacks\\n\\n- ...",
@@ -337,7 +404,7 @@ ${existingTopicsText}
       ]
     }
   ],
-  "summary": "Resumo objetivo em português destacando o que foi agrupado nos tópicos e o que foi desduplicado."
+  "summary": "Resumo detalhado citando o que foi extraído da conversa ou revisado."
 }
 `.trim();
 
@@ -438,13 +505,13 @@ ${topicsIndex}
 ${profile}
 
 ---
-# ÂNCORA TEMPORAL & RELÓGIO DO SISTEMA EM TEMPO REAL
+# ÂNCORA TEMPORAL E DIRETRIZES DO SISTEMA
 - Data de hoje: ${formattedDate}
 - Horário atual do sistema: ${formattedTime} (Horário de Brasília / Local)
 - Ano corrente: ${currentYear}
-- DIRETRIZES DE RELÓGIO E TEMPO:
-  1. Para qualquer pergunta sobre que horas são, saudações temporais ("bom dia", "boa tarde", "boa noite") ou períodos do dia, consulte EXCLUSIVAMENTE o "Horário atual do sistema" acima. NUNCA tente adivinhar a hora ou extraí-la de buscas na web!
-  2. O ano atual é ${currentYear}. Para qualquer pergunta sobre "último(a)", "recente", "resultado", eventos esportivos (F1, WEC, etc.) ou lançamentos, assuma que estamos em ${currentYear} e SEMPRE inclua "${currentYear}" na sua busca web de primeira!
+- Para perguntas sobre horário ou saudações, consulte EXCLUSIVAMENTE a âncora acima.
+- O ano atual de referência é ${currentYear}. Para eventos, shows, campeonatos ou lançamentos, compare as datas encontradas com "${formattedDate}" para garantir futuro estrito.
+- Responda sempre em Português do Brasil de forma direta, factual e sem evasivas. Se o usuário fizer uma pergunta com múltiplos requisitos, cubra a todos eles na resposta final.
 `.trim();
   }
 }

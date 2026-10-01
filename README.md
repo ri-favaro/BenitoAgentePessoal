@@ -7,12 +7,14 @@ Um assistente pessoal inteligente, modular e extensível construído em **TypeSc
 ## 🚀 Arquitetura & Diferenciais
 
 - **Identidade e Nome Dinâmicos:** A personalidade e o nome do agente (Benito) são gerenciados no arquivo `memory/rules.md` e refletidos automaticamente na interface de terminal (CLI).
-- **Memória Transparente e Auditável:** Todos os fatos, preferências de desenvolvimento e anotações ficam salvos em arquivos Markdown dentro de `memory/`. Você pode abrir no VS Code ou Obsidian, ler ou editar manualmente a qualquer momento.
-- **Ferramentas de Arquivo (Integração com Obsidian):** O agente consegue criar, ler e listar notas reais no seu sistema de arquivos (por exemplo, no cofre `G:\CofreObsidian\AgentePessoal`) através das ferramentas `write_file`, `read_file` e `list_directory`.
-- **Evolução Autônoma de Persona (`update_persona`):** Se você pedir para mudar o nome ou tom de voz, o Benito atualiza o arquivo `rules.md` no disco de forma permanente.
-- **Busca Web Local e Leitura Profunda (`search_web` + `fetch_web_page`):** Arquitetura inspirada em modelos de ponta (Perplexity, ChatGPT Search, Gemini Grounding). Integração com o metabuscador **SearXNG** rodando localmente via Docker (porta 8080) com sanitização automática de queries, ancoragem temporal contra a data do sistema e a ferramenta `fetch_web_page` para leitura do conteúdo real de páginas web, eliminando alucinações causadas por snippets curtos.
-- **Extrema Leveza e Performance:** Backend consome menos de 50 MB de RAM. Otimizado para rodar localmente na **RTX 4070 Ti (12GB)** com **Qwen 2.5 14B** ou **Qwen 2.5-Coder 14B** (~40 tokens/s e máxima precisão em tool calling) ou **7B** (>80 tok/s).
-- **Provider Agnóstico:** Protocolo compatível com OpenAI permite alternar entre Ollama local, llama-server ou Gemini Free Tier apenas alterando o `.env`.
+- **Memória Transparente, Modular e Auditável:** Fatos, preferências e aprendizados ficam salvos em arquivos Markdown (`memory/*.md`) e divididos em tópicos especializados (`memory/topics/*.md`).
+- **Consolidação Inteligente de Sessão (`/consolidar`):** O comando analisa a conversa recente em tempo real (`agent.getHistory()`), extrai novas preferências, planos e decisões técnicas, atualiza os arquivos em disco e gera um resumo dinâmico e contextual.
+- **Busca Web com Tavily AI Search & SearXNG Fallback:** Integração de alto nível com a **Tavily Search API** (otimizada para agentes de IA com respostas diretas sintetizadas, tabelas e snippets ricos) e fallback automático para o **SearXNG** local (porta 8080). Inclui sanitização estrutural, bloqueio de buscas idênticas consecutivas, cache de URLs que falharam e a **Regra Universal de Idioma** (buscas prioritárias em inglês para dados técnicos/globais, entregando a resposta traduzida em Português).
+- **Leitura Profunda com Jina Reader (`r.jina.ai`) & Anti-Alucinação Estrita (`fetch_web_page`):** O agente renderiza o JavaScript de páginas e portais modernos (SPAs em React/Next.js) via Jina Reader, extraindo o Markdown limpo e tabelas completas com fallback local, além do bloqueio estrito de URLs inventadas pelo modelo fora dos resultados reais da busca.
+- **Guarda de Síntese Final Obrigatória:** O agente garante matematicamente a entrega de uma resposta conclusiva após o uso de ferramentas, impedindo que o modelo fique mudo ou trave caso atinja o teto de passos (`maxSteps: 5`).
+- **Gerenciamento Eficiente de Contexto e VRAM:** Podagem automática de saídas de ferramentas antigas, condensação de Markdown com remoção de ruídos de imagem e janela deslizante suave, mantendo o Ollama rápido e leve na **RTX 4070 Ti (12GB)** com **Qwen 3.5 9B (24k)** ocupando apenas 6.3 GB de VRAM com 100% de offload na GPU.
+- **Ferramentas de Arquivo (Integração com Obsidian):** Criação, leitura e listagem de notas reais no sistema de arquivos (`write_file`, `read_file`, `list_directory`).
+- **Provider Agnóstico:** Suporte a Ollama local, llama-server (`llama.cpp`) ou Google Gemini Free Tier via `.env`.
 
 ---
 
@@ -26,25 +28,30 @@ BenitoAgentePessoal/
 ├── memory/
 │   ├── profile.md            # Perfil do usuário (gostos, stack, hardware, fatos aprendidos)
 │   ├── rules.md              # Identidade ativa (Benito), tom de voz e regras operacionais
-│   └── learnings.md          # Lições aprendidas e feedbacks operacionais persistidos
+│   ├── learnings.md          # Lições aprendidas e feedbacks operacionais gerais
+│   └── topics/               # Memória modular especializada por domínio
+│       ├── web-search.md     # Diretrizes universais de busca web e leitura profunda
+│       ├── sports.md         # Regras específicas de cronologia esportiva
+│       └── local-ai.md       # Diretrizes de IA local, limites de VRAM (12GB) e tool calling
 ├── tests/
-│   └── test-search.ts        # Script de validação da busca web (SearXNG)
+│   ├── test-search.ts        # Testes de busca web, sanitização e proteção anti-loop
+│   └── test-memory.ts        # Testes de memória modular e consolidação com histórico de sessão
 ├── src/
 │   ├── config.ts             # Configurações centralizadas via .env
 │   ├── cli.ts                # Interface interativa de terminal com streaming e cores
 │   ├── core/
-│   │   ├── agent.ts          # Orquestrador central (histórico, streaming, tool loops)
+│   │   ├── agent.ts          # Orquestrador central (streaming, tool calling, poda de VRAM)
 │   │   └── llm.ts            # Conexão com Ollama, llama-server ou Gemini
 │   ├── memory/
-│   │   └── memory-manager.ts # Leitura e escrita dinâmica de memória e identidade
+│   │   └── memory-manager.ts # Leitura e escrita dinâmica de memória e consolidação
 │   └── tools/
 │       ├── index.ts          # Registro central de ferramentas
 │       ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (Obsidian)
-│       ├── memory-tools.ts   # Gravação de fatos e atualização de persona
-│       └── web-tools.ts      # Busca na internet via SearXNG local
+│       ├── memory-tools.ts   # Gravação de fatos, tópicos e atualização de persona
+│       └── web-tools.ts      # Busca na internet via SearXNG local e cache anti-loop
 ├── .env                      # Suas variáveis ativas (ignorado no git)
 ├── .env.example              # Exemplo de configuração
-├── package.json
+├── package.json              # Scripts de execução e testes automatizados
 └── tsconfig.json
 ```
 
@@ -101,8 +108,12 @@ docker compose up -d
 # Ou se já possuir o container no Docker:
 docker start searxng
 
-# (Opcional) Testar a conexão e retorno da busca web:
+# (Opcional) Executar todos os testes automatizados (busca web + memória):
+npm test
+
+# Ou individualmente:
 npm run test:search
+npm run test:memory
 ```
 
 ### 4. Iniciar o Agente
@@ -119,7 +130,7 @@ npm run dev
 - `/aprendizados` — Exibe as lições aprendidas e feedbacks operacionais gerais (`memory/learnings.md`).
 - `/topicos` — Lista todos os tópicos de memória modular especializada (`memory/topics/`).
 - `/topico <nome>` — Exibe o conteúdo de um tópico específico (ex: `/topico web-search`).
-- `/consolidar` — Executa o ciclo de sono/consolidação: desduplica fatos, resolve conflitos e sintetiza regras em subpastas por tópicos.
+- `/consolidar` — Consolida a sessão ativa: analisa o diálogo recente em tempo real, extrai novas preferências, projetos e sintetiza regras nos tópicos em disco com resumo contextual.
 - `/limpar` — Reseta a conversa atual sem perder a memória persistente.
 - `/sair` — Encerra o assistente.
 - `/ajuda` — Exibe os comandos disponíveis.
