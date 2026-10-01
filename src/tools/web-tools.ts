@@ -86,13 +86,30 @@ export function formatSearchResults(data: SearxngResponse, limit: number): strin
   return sections.join("\n\n");
 }
 
-export function extractPageText(html: string, maxLength: number = 4000): { title: string; content: string } {
+export function extractPageText(html: string, maxLength: number = 10000): { title: string; content: string } {
   // Extrai título da página
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   const title = titleMatch ? titleMatch[1].trim() : "Sem título";
 
-  // Remove scripts, styles, comentários e tags de navegação/rodapé
-  let text = html
+  // Prioriza o container de conteúdo principal (<article>, <main> ou <div class="entry-content">)
+  // para evitar que menus de navegação, cabeçalhos gigantes e barras laterais ocupem o texto
+  let bodyHtml = html;
+  const articleMatch = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i);
+  const mainMatch = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
+  const entryMatch = html.match(
+    /<div\b[^>]*class="[^"]*(?:entry-content|post-content|article-body|story-body)[^"]*"[^>]*>([\s\S]*?)<\/div>/i
+  );
+
+  if (articleMatch && articleMatch[1].length > 400) {
+    bodyHtml = articleMatch[1];
+  } else if (mainMatch && mainMatch[1].length > 400) {
+    bodyHtml = mainMatch[1];
+  } else if (entryMatch && entryMatch[1].length > 400) {
+    bodyHtml = entryMatch[1];
+  }
+
+  // Remove scripts, styles, comentários, barras laterais, formulários e navegação
+  let text = bodyHtml
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
@@ -100,6 +117,9 @@ export function extractPageText(html: string, maxLength: number = 4000): { title
     .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, "")
     .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, "")
     .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, "")
+    .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, "")
+    .replace(/<form\b[^<]*(?:(?!<\/form>)<[^<]*)*<\/form>/gi, "")
+    .replace(/<button\b[^<]*(?:(?!<\/button>)<[^<]*)*<\/button>/gi, "")
     .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, "");
 
   // Substitui quebras semânticas por quebras de linha
@@ -116,6 +136,8 @@ export function extractPageText(html: string, maxLength: number = 4000): { title
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
+    .replace(/&#8211;/g, "–")
+    .replace(/&#8212;/g, "—")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">");
 
@@ -137,12 +159,12 @@ export function createWebTools() {
   return {
     search_web: tool({
       description:
-        "Realiza buscas na internet em tempo real via metabuscador local SearXNG. Retorna uma lista de links, títulos e snippets resumidos. Use para encontrar as melhores fontes antes de aprofundar.",
+        "Realiza buscas na internet em tempo real via metabuscador local SearXNG. Retorna uma lista de links, títulos e snippets resumidos. DICA MULTILÍNGUE: Para campeonatos e esportes internacionais (WEC, F1, Le Mans), tecnologia global ou dados técnicos específicos, formule queries em inglês quando fontes em português forem superficiais, e traga a resposta final traduzida em Português do Brasil.",
       parameters: z.object({
         query: z
           .string()
           .describe(
-            "Termos de busca objetivos. Evite a palavra 'último' ou jargões restritivos como 'LLM' (prefira 'novo modelo IA', 'anuncia', 'Gemini', 'F1 resultado', etc.)."
+            "Termos de busca objetivos. Evite a palavra 'último' ou jargões restritivos como 'LLM' (prefira 'novo modelo IA', 'anuncia', 'Gemini', 'F1 resultado', etc.). Para assuntos internacionais, pode ser em inglês (ex: '2026 6 Hours of Fuji results fastest lap')."
           ),
         numResults: z
           .number()
@@ -256,7 +278,7 @@ export function createWebTools() {
           }
 
           const html = await response.text();
-          const { title, content } = extractPageText(html, 4000);
+          const { title, content } = extractPageText(html, 10000);
 
           return {
             success: true,
