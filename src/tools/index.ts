@@ -1,13 +1,16 @@
 import { MemoryManager } from "../memory/memory-manager.js";
 import { createMemoryTools } from "./memory-tools.js";
 import { createFilesystemTools } from "./filesystem-tools.js";
-import { createWebTools } from "./web-tools.js";
+import { createWebTools, type WebToolsSessionState } from "./web-tools.js";
 
-export function getAgentTools(memoryManager: MemoryManager) {
+export function getAgentTools(
+  memoryManager: MemoryManager,
+  webToolsState?: WebToolsSessionState
+) {
   return {
     ...createMemoryTools(memoryManager),
     ...createFilesystemTools(),
-    ...createWebTools(),
+    ...createWebTools(webToolsState),
   };
 }
 

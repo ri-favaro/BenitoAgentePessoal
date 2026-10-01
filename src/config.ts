@@ -5,6 +5,7 @@ dotenv.config();
 
 export interface AppConfig {
   provider: "ollama" | "openai-compatible" | "gemini";
+  searchProvider: "tavily" | "searxng";
   ollama: {
     baseUrl: string;
     model: string;
@@ -17,6 +18,9 @@ export interface AppConfig {
   gemini: {
     apiKey: string;
     model: string;
+  };
+  tavily: {
+    apiKey: string;
   };
   searxng: {
     baseUrl: string;
@@ -26,9 +30,12 @@ export interface AppConfig {
 
 export const config: AppConfig = {
   provider: (process.env.LLM_PROVIDER as AppConfig["provider"]) || "ollama",
+  searchProvider:
+    (process.env.SEARCH_PROVIDER as AppConfig["searchProvider"]) ||
+    (process.env.TAVILY_API_KEY ? "tavily" : "searxng"),
   ollama: {
     baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1",
-    model: process.env.OLLAMA_MODEL || "qwen2.5:7b",
+    model: process.env.OLLAMA_MODEL || "qwen3.5:9b-24k",
   },
   openaiCompatible: {
     baseUrl: process.env.OPENAI_BASE_URL || "http://localhost:8080/v1",
@@ -38,6 +45,9 @@ export const config: AppConfig = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || "",
     model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+  },
+  tavily: {
+    apiKey: process.env.TAVILY_API_KEY || "",
   },
   searxng: {
     baseUrl: process.env.SEARXNG_BASE_URL || "http://localhost:8080",

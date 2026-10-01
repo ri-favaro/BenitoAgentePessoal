@@ -24,7 +24,11 @@ async function main() {
     console.log(pc.gray(`• Modelo: `) + pc.yellow(config.gemini.model));
   }
   console.log(pc.gray(`• Memória: `) + pc.magenta(config.memoryDir));
-  console.log(pc.gray(`• Busca Web: `) + pc.blue(`SearXNG (${config.searxng.baseUrl})`));
+  const searchDesc =
+    config.searchProvider === "tavily"
+      ? `Tavily AI Search (api.tavily.com)`
+      : `SearXNG (${config.searxng.baseUrl})`;
+  console.log(pc.gray(`• Busca Web: `) + pc.blue(searchDesc));
   console.log(pc.gray("--------------------------------------------------"));
   console.log(pc.dim("Comandos especiais: /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
   console.log("");
@@ -114,13 +118,20 @@ async function main() {
       }
 
       if (trimmed === "/consolidar") {
+        const history = agent.getHistory();
+        const hasSessionHistory = history.length > 0;
         console.log(
           pc.yellow(
-            "\n[🧠 Benito está consolidando, desduplicando e organizando a memória em tópicos...]"
+            hasSessionHistory
+              ? `\n[🧠 Benito está analisando a conversa recente (${history.length} mensagens) e consolidando a memória em tópicos...]`
+              : "\n[🧠 Benito está consolidando, desduplicando e organizando a memória em tópicos...]"
           )
         );
         try {
-          const result = await agent.memoryManager.consolidateMemory();
+          const result = await agent.memoryManager.consolidateMemory(
+            undefined,
+            history
+          );
           if (result.success) {
             console.log(pc.green("\n✔ Memória consolidada e modularizada com sucesso!"));
             console.log(pc.cyan("\nResumo da Consolidação:"));
