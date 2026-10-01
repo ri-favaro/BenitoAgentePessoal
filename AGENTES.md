@@ -38,9 +38,15 @@ BenitoAgentePessoal/
 ├── package.json              # Dependências e scripts
 ├── tsconfig.json             # Configuração estrita do compilador TS
 ├── .env / .env.example       # Variáveis de ambiente (provedores e endpoints)
+├── docker-compose.yml        # Subida do SearXNG local com mapeamento de porta
+├── searxng/
+│   └── settings.yml          # Configurações do SearXNG (JSON API)
 ├── memory/
 │   ├── profile.md            # Perfil do Luiz Ricardo (stack, hardware, fatos aprendidos)
-│   └── rules.md              # Identidade do Benito, diretrizes de resposta e honestidade
+│   ├── rules.md              # Identidade do Benito, diretrizes de resposta e honestidade
+│   └── learnings.md          # Lições aprendidas e feedbacks operacionais persistidos
+├── tests/
+│   └── test-search.ts        # Testes de integração da busca web e tratamento offline
 └── src/
     ├── config.ts             # Leitura centralizada de variáveis de ambiente
     ├── cli.ts                # Terminal interativo com streaming, cores e comandos
@@ -52,21 +58,50 @@ BenitoAgentePessoal/
     └── tools/
         ├── index.ts          # Registro central onde todas as tools são expostas
         ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (ex: Obsidian)
-        └── memory-tools.ts   # Gravação de fatos (profile) e atualização de persona (rules)
+        ├── memory-tools.ts   # Gravação de fatos (profile), aprendizados (learnings) e persona (rules)
+        └── web-tools.ts      # Ferramentas de busca (SearXNG) e leitura profunda (fetch_web_page)
 ```
 
 ---
 
 ## 🧠 Como Funciona o Sistema de Memória
 
-A memória do Benito é dividida em duas camadas:
+A memória do Benito é dividida em três camadas cognitivas com suporte a modularidade e consolidação de longo prazo:
 
-1. **Memória de Curto Prazo (RAM):**
+1. **Memória de Curto Prazo (RAM / Working Memory):**
    * O array `messages: CoreMessage[]` mantido em memória dentro da classe `PersonalAgent` durante a execução da CLI. É limpo quando o usuário usa `/limpar` ou encerra o processo com `/sair`.
-2. **Memória de Longo Prazo (Disco / Markdown):**
-   * **`memory/profile.md`:** Guarda informações biográficas sobre o Luiz Ricardo, suas tecnologias favoritas, notas de projetos e novos fatos que o Benito aprende via ferramenta `save_memory`.
+2. **Memória de Longo Prazo Principal (Disco / Markdown):**
+   * **`memory/profile.md`:** Guarda informações biográficas sobre o Luiz Ricardo, suas tecnologias favoritas, notas de projetos e preferências aprendidas via ferramenta `save_memory`.
    * **`memory/rules.md`:** Guarda as diretrizes comportamentais, o nome oficial (Benito) e o tom de voz. Atualizado via ferramenta `update_persona`.
-   * **Montagem do Contexto:** A cada mensagem, o `MemoryManager.buildSystemPrompt()` lê os arquivos atualizados do disco e injeta como `system prompt` na LLM.
+   * **`memory/learnings.md`:** Guarda lições aprendidas, feedbacks corretivos e regras procedurais transversais gerais ensinadas pelo usuário. Atualizado via ferramenta `save_learning`.
+   * **Montagem do Contexto & Âncora Temporal com Relógio:** A cada mensagem, o `MemoryManager.buildSystemPrompt()` lê os arquivos atualizados do disco e injeta dinamicamente a data, ano e **horário atual do sistema** (`quarta-feira, 30 de setembro de 2026 às 22:54`), impedindo que o agente deduza horas a partir da internet.
+3. **Memória Modular Especializada por Tópicos (`memory/topics/*.md`):**
+   * Subpasta com arquivos dedicados por domínio (ex: `web-search.md`, `sports.md`, `coding.md`).
+   * Mantém o prompt enxuto e escalável: em vez de injetar dezenas de regras específicas no prompt principal, o agente carrega apenas um índice compacto com 1 linha por tópico (`readAllTopicsIndex()`).
+   * Ferramentas dedicadas: `read_topic_memory`, `save_topic_learning` e `list_memory_topics`.
+4. **Ciclo de Consolidação de Memória (`/consolidar`):**
+   * Inspirado no *Memory Sleep Cycle* de agentes SOTA (MemGPT / Letta, Generative Agents):
+   * O método `MemoryManager.consolidateMemory()` analisa a memória bruta, remove duplicatas, resolve contradições, agrupa regras específicas em subpastas por tópicos e sintetiza `learnings.md` e `profile.md` em diretrizes mestras compactas.
+
+---
+
+## 🌐 Como Funciona a Busca Web (Arquitetura Frontier em 2 Passos)
+
+Modelos de ponta (Perplexity, ChatGPT Search, Gemini Grounding) não confiam apenas em pequenos snippets de busca retornados por motores de busca para responder perguntas com datas, eventos futuros ou dados tabulares.
+
+O Benito adota a mesma arquitetura através de duas ferramentas complementares em `src/tools/web-tools.ts`:
+
+1. **Passo 1: `search_web` (Descoberta & Mapeamento):**
+   * Consulta o **SearXNG** local (porta 8080) usando categorias combinadas (`general,news`).
+   * Sanitiza a query do usuário automaticamente com `sanitizeSearchQuery`: remove termos armadilha (ex: *"último"* atrai discussões gramaticais ou notícias de 2024; *"LLM"* é expandido para *"IA"* ou modelos específicos).
+   * Retorna os links mais promissores com data de publicação e motor de busca de origem.
+
+2. **Passo 2: `fetch_web_page` (Leitura Profunda & Verificação):**
+   * Quando a resposta exige datas exatas, tabelas de shows/corridas ou confirmação factual, o agente faz uma requisição HTTP direta na URL mais confiável retornada no Passo 1.
+   * A função `extractPageText` remove scripts, styles, cabeçalhos, rodapés e tags de navegação, entregando até 4000 caracteres de texto limpo e legível.
+
+3. **Validação Cronológica Estrita:**
+   * O agente compara datas encontradas contra a **data de hoje do sistema** injetada dinamicamente. Se a data de um evento já passou em relação à data atual, ele jamais o classifica como "o próximo" ou "recente".
 
 ---
 
@@ -130,6 +165,6 @@ Ao adicionar uma nova ferramenta para o Benito:
 
 ## 🚀 Próximas Funcionalidades Sugeridas no Roadmap
 
-1. **Interface Telegram (grammY):** Criar um módulo opcional para conversar com o Benito pelo celular via bot do Telegram.
-2. **Busca na Web (Web Search Tool):** Integrar ferramenta de pesquisa na internet (DuckDuckGo / Tavily) para respostas em tempo real.
+1. **[Concluído] Busca na Web (SearXNG via Docker):** Ferramenta `search_web` integrada localmente sem custos de API e com privacidade.
+2. **Interface Telegram (grammY):** Criar um módulo opcional para conversar com o Benito pelo celular via bot do Telegram.
 3. **Busca Semântica no Obsidian (RAG Local):** Indexar notas do Obsidian usando embeddings locais (`nomic-embed-text` ou `bge-m3` via Ollama) com LanceDB ou SQLite.

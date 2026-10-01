@@ -1,0 +1,30 @@
+# Configuração do SearXNG para o Benito (Agente Pessoal)
+# Documentação completa: https://docs.searxng.org/admin/settings/
+
+use_default_settings: true
+
+server:
+  secret_key: "GPXsIXo0ZMYwwcv7SBTcTPMjfs60hgEQ"
+  image_proxy: true
+
+search:
+  formats:
+    - html
+    - json
+
+engines:
+  - name: bing
+    engine: bing
+    disabled: false
+  - name: bing news
+    engine: bing_news
+    disabled: false
+  - name: google news
+    engine: google_news
+    disabled: false
+  - name: wikipedia
+    engine: wikipedia
+    disabled: false
+  - name: wikinews
+    engine: wikinews
+    disabled: false

@@ -7,7 +7,10 @@
   "scripts": {
     "dev": "tsx src/cli.ts",
     "start": "tsx src/cli.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test": "npm run test:search && npm run test:memory",
+    "test:search": "tsx tests/test-search.ts",
+    "test:memory": "tsx tests/test-memory.ts"
   },
   "keywords": [
     "ai",

@@ -10,6 +10,7 @@ Um assistente pessoal inteligente, modular e extensível construído em **TypeSc
 - **Memória Transparente e Auditável:** Todos os fatos, preferências de desenvolvimento e anotações ficam salvos em arquivos Markdown dentro de `memory/`. Você pode abrir no VS Code ou Obsidian, ler ou editar manualmente a qualquer momento.
 - **Ferramentas de Arquivo (Integração com Obsidian):** O agente consegue criar, ler e listar notas reais no seu sistema de arquivos (por exemplo, no cofre `G:\CofreObsidian\AgentePessoal`) através das ferramentas `write_file`, `read_file` e `list_directory`.
 - **Evolução Autônoma de Persona (`update_persona`):** Se você pedir para mudar o nome ou tom de voz, o Benito atualiza o arquivo `rules.md` no disco de forma permanente.
+- **Busca Web Local e Leitura Profunda (`search_web` + `fetch_web_page`):** Arquitetura inspirada em modelos de ponta (Perplexity, ChatGPT Search, Gemini Grounding). Integração com o metabuscador **SearXNG** rodando localmente via Docker (porta 8080) com sanitização automática de queries, ancoragem temporal contra a data do sistema e a ferramenta `fetch_web_page` para leitura do conteúdo real de páginas web, eliminando alucinações causadas por snippets curtos.
 - **Extrema Leveza e Performance:** Backend consome menos de 50 MB de RAM. Otimizado para rodar localmente na **RTX 4070 Ti (12GB)** com **Qwen 2.5 14B** ou **Qwen 2.5-Coder 14B** (~40 tokens/s e máxima precisão em tool calling) ou **7B** (>80 tok/s).
 - **Provider Agnóstico:** Protocolo compatível com OpenAI permite alternar entre Ollama local, llama-server ou Gemini Free Tier apenas alterando o `.env`.
 
@@ -19,9 +20,15 @@ Um assistente pessoal inteligente, modular e extensível construído em **TypeSc
 
 ```
 BenitoAgentePessoal/
+├── docker-compose.yml        # Orquestração do metabuscador SearXNG local
+├── searxng/
+│   └── settings.yml          # Configuração do SearXNG (JSON API habilitada)
 ├── memory/
 │   ├── profile.md            # Perfil do usuário (gostos, stack, hardware, fatos aprendidos)
-│   └── rules.md              # Identidade ativa (Benito), tom de voz e regras operacionais
+│   ├── rules.md              # Identidade ativa (Benito), tom de voz e regras operacionais
+│   └── learnings.md          # Lições aprendidas e feedbacks operacionais persistidos
+├── tests/
+│   └── test-search.ts        # Script de validação da busca web (SearXNG)
 ├── src/
 │   ├── config.ts             # Configurações centralizadas via .env
 │   ├── cli.ts                # Interface interativa de terminal com streaming e cores
@@ -33,7 +40,8 @@ BenitoAgentePessoal/
 │   └── tools/
 │       ├── index.ts          # Registro central de ferramentas
 │       ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (Obsidian)
-│       └── memory-tools.ts   # Gravação de fatos e atualização de persona
+│       ├── memory-tools.ts   # Gravação de fatos e atualização de persona
+│       └── web-tools.ts      # Busca na internet via SearXNG local
 ├── .env                      # Suas variáveis ativas (ignorado no git)
 ├── .env.example              # Exemplo de configuração
 ├── package.json
@@ -83,7 +91,21 @@ Depois, basta apontar no `.env`: `OLLAMA_MODEL=qwen2.5:14b-8k` (ou `qwen2.5-code
 
 *(Dica de performance no Windows: defina a variável de ambiente `OLLAMA_FLASH_ATTENTION=1` para ativar Flash Attention e economizar VRAM).*
 
-### 3. Iniciar o Agente
+### 3. Iniciar o Metabuscador SearXNG (Opcional - Busca Web Local)
+Para permitir que o Benito pesquise na internet em tempo real sem custos de API:
+
+```powershell
+# Subir o container SearXNG via Docker Compose (porta 8080)
+docker compose up -d
+
+# Ou se já possuir o container no Docker:
+docker start searxng
+
+# (Opcional) Testar a conexão e retorno da busca web:
+npm run test:search
+```
+
+### 4. Iniciar o Agente
 ```powershell
 npm run dev
 ```
@@ -94,6 +116,10 @@ npm run dev
 
 - `/memoria` — Mostra o que o Benito lembra sobre você (`memory/profile.md`).
 - `/regras` — Exibe a identidade, regras e diretrizes ativas (`memory/rules.md`).
+- `/aprendizados` — Exibe as lições aprendidas e feedbacks operacionais gerais (`memory/learnings.md`).
+- `/topicos` — Lista todos os tópicos de memória modular especializada (`memory/topics/`).
+- `/topico <nome>` — Exibe o conteúdo de um tópico específico (ex: `/topico web-search`).
+- `/consolidar` — Executa o ciclo de sono/consolidação: desduplica fatos, resolve conflitos e sintetiza regras em subpastas por tópicos.
 - `/limpar` — Reseta a conversa atual sem perder a memória persistente.
 - `/sair` — Encerra o assistente.
 - `/ajuda` — Exibe os comandos disponíveis.

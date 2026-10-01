@@ -24,8 +24,9 @@ async function main() {
     console.log(pc.gray(`• Modelo: `) + pc.yellow(config.gemini.model));
   }
   console.log(pc.gray(`• Memória: `) + pc.magenta(config.memoryDir));
+  console.log(pc.gray(`• Busca Web: `) + pc.blue(`SearXNG (${config.searxng.baseUrl})`));
   console.log(pc.gray("--------------------------------------------------"));
-  console.log(pc.dim("Comandos especiais: /memoria, /regras, /limpar, /sair, /ajuda"));
+  console.log(pc.dim("Comandos especiais: /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
   console.log("");
   while (true) {
     let userInput: string;
@@ -68,12 +69,83 @@ async function main() {
         continue;
       }
 
+      if (trimmed === "/aprendizados") {
+        const learnings = await agent.memoryManager.readLearnings();
+        console.log(pc.cyan("\n--- APRENDIZADOS E FEEDBACKS OPERACIONAIS ---"));
+        console.log(learnings);
+        console.log(pc.cyan("---------------------------------------------\n"));
+        continue;
+      }
+
+      if (trimmed === "/topicos") {
+        const topics = await agent.memoryManager.listTopics();
+        console.log(pc.cyan("\n--- TÓPICOS DE MEMÓRIA MODULAR (memory/topics/) ---"));
+        if (topics.length === 0) {
+          console.log(pc.gray("Nenhum tópico criado ainda. Use /consolidar para organizar seus aprendizados em tópicos."));
+        } else {
+          for (const t of topics) {
+            console.log(
+              pc.bold(pc.green(`• ${t.slug}`)) +
+                pc.gray(` (${t.title}): `) +
+                t.description +
+                pc.yellow(` [${t.count} regra${t.count === 1 ? "" : "s"}]`)
+            );
+          }
+        }
+        console.log(pc.cyan("---------------------------------------------------\n"));
+        continue;
+      }
+
+      if (trimmed.startsWith("/topico ")) {
+        const slug = trimmed.replace("/topico ", "").trim();
+        const content = await agent.memoryManager.readTopic(slug);
+        if (!content) {
+          console.log(
+            pc.red(
+              `\nTópico '${slug}' não encontrado. Digite /topicos para listar os tópicos existentes.\n`
+            )
+          );
+        } else {
+          console.log(pc.cyan(`\n--- TÓPICO: ${slug.toUpperCase()} ---`));
+          console.log(content);
+          console.log(pc.cyan("-------------------------------------\n"));
+        }
+        continue;
+      }
+
+      if (trimmed === "/consolidar") {
+        console.log(
+          pc.yellow(
+            "\n[🧠 Benito está consolidando, desduplicando e organizando a memória em tópicos...]"
+          )
+        );
+        try {
+          const result = await agent.memoryManager.consolidateMemory();
+          if (result.success) {
+            console.log(pc.green("\n✔ Memória consolidada e modularizada com sucesso!"));
+            console.log(pc.cyan("\nResumo da Consolidação:"));
+            console.log(result.summary);
+            console.log("");
+          } else {
+            console.log(pc.red(`\n✖ Falha na consolidação: ${result.summary}\n`));
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.log(pc.red(`\n✖ Erro ao consolidar memória: ${msg}\n`));
+        }
+        continue;
+      }
+
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
-        console.log(pc.bold("  /memoria ") + "- Exibe o perfil e notas salvas sobre você");
-        console.log(pc.bold("  /regras  ") + "- Exibe o nome e diretrizes ativas do agente");
-        console.log(pc.bold("  /limpar  ") + "- Limpa a sessão de contexto atual");
-        console.log(pc.bold("  /sair    ") + "- Encerra o assistente\n");
+        console.log(pc.bold("  /memoria      ") + "- Exibe o perfil e notas salvas sobre você");
+        console.log(pc.bold("  /regras       ") + "- Exibe o nome e diretrizes ativas do agente");
+        console.log(pc.bold("  /aprendizados ") + "- Exibe as lições aprendidas e feedbacks operacionais gerais");
+        console.log(pc.bold("  /topicos      ") + "- Lista os tópicos de memória modular especializada (memory/topics/)");
+        console.log(pc.bold("  /topico <nome>") + "- Exibe o conteúdo de um tópico específico (ex: /topico web-search)");
+        console.log(pc.bold("  /consolidar   ") + "- Sintetiza, desduplica e organiza a memória em subpastas por tópicos");
+        console.log(pc.bold("  /limpar       ") + "- Limpa a sessão de contexto atual");
+        console.log(pc.bold("  /sair         ") + "- Encerra o assistente\n");
         continue;
       }
 
@@ -90,6 +162,11 @@ async function main() {
             const fact = (args as { fact?: string })?.fact || "";
             process.stdout.write(
               pc.dim(pc.yellow(`\n[🧠 Memória: salvando "${fact}"]\n${agentName}: `))
+            );
+          } else if (toolName === "save_learning") {
+            const lesson = (args as { lesson?: string })?.lesson || "";
+            process.stdout.write(
+              pc.dim(pc.green(`\n[💡 Aprendizado: salvando lição "${lesson}"]\n${agentName}: `))
             );
           } else if (toolName === "update_persona") {
             const newName = (args as { newName?: string })?.newName;
@@ -112,6 +189,31 @@ async function main() {
             const dirPath = (args as { dirPath?: string })?.dirPath || "";
             process.stdout.write(
               pc.dim(pc.magenta(`\n[📂 Pasta: listando "${dirPath}"]\n${agentName}: `))
+            );
+          } else if (toolName === "search_web") {
+            const query = (args as { query?: string })?.query || "";
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[🌐 Web: buscando "${query}"]\n${agentName}: `))
+            );
+          } else if (toolName === "fetch_web_page") {
+            const url = (args as { url?: string })?.url || "";
+            process.stdout.write(
+              pc.dim(pc.blue(`\n[📄 Web: lendo página "${url}"]\n${agentName}: `))
+            );
+          } else if (toolName === "read_topic_memory") {
+            const topicSlug = (args as { topicSlug?: string })?.topicSlug || "";
+            process.stdout.write(
+              pc.dim(pc.magenta(`\n[📂 Memória: consultando tópico "${topicSlug}"]\n${agentName}: `))
+            );
+          } else if (toolName === "save_topic_learning") {
+            const topicSlug = (args as { topicSlug?: string })?.topicSlug || "";
+            const lesson = (args as { lesson?: string })?.lesson || "";
+            process.stdout.write(
+              pc.dim(pc.green(`\n[💡 Memória: gravando regra no tópico "${topicSlug}" ("${lesson}")]\n${agentName}: `))
+            );
+          } else if (toolName === "list_memory_topics") {
+            process.stdout.write(
+              pc.dim(pc.magenta(`\n[📂 Memória: listando tópicos modulares]\n${agentName}: `))
             );
           }
         },
