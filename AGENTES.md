@@ -59,7 +59,7 @@ BenitoAgentePessoal/
         ├── index.ts          # Registro central onde todas as tools são expostas
         ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (ex: Obsidian)
         ├── memory-tools.ts   # Gravação de fatos (profile), aprendizados (learnings) e persona (rules)
-        └── web-tools.ts      # Ferramenta de busca web em tempo real (SearXNG)
+        └── web-tools.ts      # Ferramentas de busca (SearXNG) e leitura profunda (fetch_web_page)
 ```
 
 ---
@@ -75,6 +75,26 @@ A memória do Benito é dividida em duas camadas:
    * **`memory/rules.md`:** Guarda as diretrizes comportamentais, o nome oficial (Benito) e o tom de voz. Atualizado via ferramenta `update_persona`.
    * **`memory/learnings.md`:** Guarda lições aprendidas, feedbacks corretivos e regras procedurais ensinadas pelo usuário (ex: incluir ano corrente em buscas de esportes). Atualizado via ferramenta `save_learning`.
    * **Montagem do Contexto & Âncora Temporal:** A cada mensagem, o `MemoryManager.buildSystemPrompt()` lê os arquivos atualizados do disco e injeta dinamicamente a data e ano atuais (`Data de hoje: ... | Ano corrente: 2026`) com instruções para ancoragem de buscas em tempo real.
+
+---
+
+## 🌐 Como Funciona a Busca Web (Arquitetura Frontier em 2 Passos)
+
+Modelos de ponta (Perplexity, ChatGPT Search, Gemini Grounding) não confiam apenas em pequenos snippets de busca retornados por motores de busca para responder perguntas com datas, eventos futuros ou dados tabulares.
+
+O Benito adota a mesma arquitetura através de duas ferramentas complementares em `src/tools/web-tools.ts`:
+
+1. **Passo 1: `search_web` (Descoberta & Mapeamento):**
+   * Consulta o **SearXNG** local (porta 8080) usando categorias combinadas (`general,news`).
+   * Sanitiza a query do usuário automaticamente com `sanitizeSearchQuery`: remove termos armadilha (ex: *"último"* atrai discussões gramaticais ou notícias de 2024; *"LLM"* é expandido para *"IA"* ou modelos específicos).
+   * Retorna os links mais promissores com data de publicação e motor de busca de origem.
+
+2. **Passo 2: `fetch_web_page` (Leitura Profunda & Verificação):**
+   * Quando a resposta exige datas exatas, tabelas de shows/corridas ou confirmação factual, o agente faz uma requisição HTTP direta na URL mais confiável retornada no Passo 1.
+   * A função `extractPageText` remove scripts, styles, cabeçalhos, rodapés e tags de navegação, entregando até 4000 caracteres de texto limpo e legível.
+
+3. **Validação Cronológica Estrita:**
+   * O agente compara datas encontradas contra a **data de hoje do sistema** injetada dinamicamente. Se a data de um evento já passou em relação à data atual, ele jamais o classifica como "o próximo" ou "recente".
 
 ---
 

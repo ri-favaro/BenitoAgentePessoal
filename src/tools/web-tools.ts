@@ -86,16 +86,63 @@ export function formatSearchResults(data: SearxngResponse, limit: number): strin
   return sections.join("\n\n");
 }
 
+export function extractPageText(html: string, maxLength: number = 4000): { title: string; content: string } {
+  // Extrai título da página
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  const title = titleMatch ? titleMatch[1].trim() : "Sem título";
+
+  // Remove scripts, styles, comentários e tags de navegação/rodapé
+  let text = html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, "")
+    .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, "")
+    .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, "")
+    .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, "")
+    .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, "");
+
+  // Substitui quebras semânticas por quebras de linha
+  text = text
+    .replace(/<\/(p|div|h[1-6]|li|article|section|tr)>/gi, "\n")
+    .replace(/<br\s*[\/]?>/gi, "\n")
+    .replace(/<td\b[^>]*>/gi, " | ")
+    .replace(/<th\b[^>]*>/gi, " | ")
+    .replace(/<[^>]+>/g, " ");
+
+  // Decodifica entidades HTML comuns
+  text = text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+
+  // Filtra linhas vazias
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const cleanContent = lines.join("\n").slice(0, maxLength);
+
+  return {
+    title,
+    content: cleanContent || "Não foi possível extrair texto legível desta página.",
+  };
+}
+
 export function createWebTools() {
   return {
     search_web: tool({
       description:
-        "Realiza buscas na internet em tempo real via metabuscador local SearXNG. Utilize para encontrar fatos atuais, lançamentos de IA, notícias recentes, eventos esportivos e datas. IMPORTANTE: Use termos diretos como 'Google anuncia nova IA 2026' ou 'Google novo modelo IA 2026' em vez de palavras conversacionais.",
+        "Realiza buscas na internet em tempo real via metabuscador local SearXNG. Retorna uma lista de links, títulos e snippets resumidos. Use para encontrar as melhores fontes antes de aprofundar.",
       parameters: z.object({
         query: z
           .string()
           .describe(
-            "Termos de busca objetivos. Evite a palavra 'último' ou jargões restritivos como 'LLM' (prefira 'novo modelo IA', 'anuncia', 'Gemini', etc.)."
+            "Termos de busca objetivos. Evite a palavra 'último' ou jargões restritivos como 'LLM' (prefira 'novo modelo IA', 'anuncia', 'Gemini', 'F1 resultado', etc.)."
           ),
         numResults: z
           .number()
@@ -173,6 +220,56 @@ export function createWebTools() {
           return {
             success: false,
             error: `Erro ao realizar busca web no SearXNG: ${msg}`,
+          };
+        }
+      },
+    }),
+
+    fetch_web_page: tool({
+      description:
+        "Abre uma URL e extrai o conteúdo textual completo do artigo, notícia ou página web (leitura profunda). Use SEMPRE que os snippets de search_web forem muito curtos, quando precisar verificar cronogramas de shows/turnês, calendários esportivos, tabelas de datas ou ler a matéria jornalística completa antes de responder.",
+      parameters: z.object({
+        url: z
+          .string()
+          .url()
+          .describe("A URL completa da página a ser lida (ex: 'https://exemplo.com/materia')."),
+      }),
+      execute: async ({ url }) => {
+        try {
+          const response = await fetch(url, {
+            signal: AbortSignal.timeout(12000),
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+              Accept:
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+          });
+
+          if (!response.ok) {
+            return {
+              success: false,
+              url,
+              error: `Falha ao acessar página (HTTP ${response.status}: ${response.statusText}).`,
+            };
+          }
+
+          const html = await response.text();
+          const { title, content } = extractPageText(html, 4000);
+
+          return {
+            success: true,
+            url,
+            title,
+            content,
+          };
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          return {
+            success: false,
+            url,
+            error: `Erro ao ler página web: ${msg}`,
           };
         }
       },

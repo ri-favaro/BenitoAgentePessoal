@@ -133,6 +133,11 @@ async function main() {
             process.stdout.write(
               pc.dim(pc.cyan(`\n[🌐 Web: buscando "${query}"]\n${agentName}: `))
             );
+          } else if (toolName === "fetch_web_page") {
+            const url = (args as { url?: string })?.url || "";
+            process.stdout.write(
+              pc.dim(pc.blue(`\n[📄 Web: lendo página "${url}"]\n${agentName}: `))
+            );
           }
         },
       });

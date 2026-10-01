@@ -124,6 +124,21 @@ async function runTests() {
     process.exit(1);
   }
 
+  // Teste 6: Leitura profunda de página web (fetch_web_page)
+  console.log(pc.yellow("6. Testando leitura profunda de página web (fetch_web_page)..."));
+  const pageResult = await tools.fetch_web_page.execute(
+    { url: "https://pt.wikipedia.org/wiki/BTS_World_Tour_Arirang" },
+    { messages: [], toolCallId: "test-fetch-bts" }
+  );
+
+  if (pageResult.success && pageResult.content && pageResult.content.length > 200) {
+    console.log(pc.green(`✔ Página lida com sucesso! Título: "${pageResult.title}"`));
+    console.log(pc.dim(`Tamanho do texto extraído: ${pageResult.content.length} caracteres.\n`));
+  } else {
+    console.error(pc.red("✖ Falha na leitura profunda de página:"), pageResult);
+    process.exit(1);
+  }
+
   console.log(pc.bold(pc.green("Todos os testes passaram com sucesso! 🚀\n")));
 }
 
