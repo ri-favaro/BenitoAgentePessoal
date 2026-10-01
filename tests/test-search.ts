@@ -87,6 +87,20 @@ async function runTests() {
     process.exit(1);
   }
 
+  // Teste 4: Busca de notícias e eventos recentes (general,news)
+  console.log(pc.yellow("4. Testando busca em tempo real com categorias 'general,news' ('Peugeot 9X8 Fuji')..."));
+  const newsResult = await tools.search_web.execute(
+    { query: "Peugeot 9X8 Fuji", numResults: 3, categories: "general,news" },
+    { messages: [], toolCallId: "test-news" }
+  );
+
+  if (newsResult.success && newsResult.summary?.toLowerCase().includes("fuji")) {
+    console.log(pc.green("✔ Evento recente encontrado com sucesso usando general,news!\n"));
+  } else {
+    console.error(pc.red("✖ Falha na busca de eventos recentes:"), newsResult);
+    process.exit(1);
+  }
+
   console.log(pc.bold(pc.green("Todos os testes passaram com sucesso! 🚀\n")));
 }
 

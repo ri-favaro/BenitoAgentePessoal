@@ -7,6 +7,8 @@ export interface SearxngResultItem {
   url?: string;
   content?: string;
   engine?: string;
+  publishedDate?: string | null;
+  pubdate?: string;
 }
 
 export interface SearxngInfobox {
@@ -55,7 +57,10 @@ export function formatSearchResults(data: SearxngResponse, limit: number): strin
         const title = item.title?.trim() || "Sem título";
         const url = item.url?.trim() || "";
         const snippet = item.content?.trim() || "Sem descrição disponível.";
-        return `${index + 1}. **[${title}](${url})**\n   ${snippet}`;
+        const date = item.publishedDate || item.pubdate;
+        const dateBadge = date ? ` [Data: ${date}]` : "";
+        const engineBadge = item.engine ? ` (Fonte: ${item.engine})` : "";
+        return `${index + 1}. **[${title}](${url})**${dateBadge}${engineBadge}\n   ${snippet}`;
       })
       .join("\n\n");
     sections.push(`### 🌐 Resultados da Busca:\n${resultsText}`);
@@ -68,14 +73,25 @@ export function createWebTools() {
   return {
     search_web: tool({
       description:
-        "Realiza buscas na internet em tempo real via metabuscador local SearXNG. Use quando o usuário pedir informações atuais, notícias, documentação recente, cotações ou fatos externos ao seu conhecimento.",
+        "Realiza buscas na internet em tempo real via metabuscador local SearXNG. Utilize para encontrar fatos atuais, notícias recentes, eventos esportivos, documentações e datas precisas. Sempre formule termos de busca diretos e objetivos.",
       parameters: z.object({
-        query: z.string().describe("Termos de busca para pesquisar na web."),
+        query: z
+          .string()
+          .describe(
+            "Termos de busca objetivos com palavras-chave relevantes (ex: '\"Peugeot 9X8\" WEC Fuji' ou 'Node.js 22 novidades'). Evite perguntas longas."
+          ),
         numResults: z
           .number()
           .optional()
           .default(5)
           .describe("Número máximo de resultados mais relevantes a retornar (padrão: 5)."),
+        categories: z
+          .string()
+          .optional()
+          .default("general,news")
+          .describe(
+            "Categorias do SearXNG separadas por vírgula. Padrão: 'general,news' (inclui portais gerais e notícias recentes simultaneamente)."
+          ),
         language: z
           .string()
           .optional()
@@ -83,11 +99,14 @@ export function createWebTools() {
             "Código de idioma opcional para filtrar os resultados (ex: 'pt-BR', 'en'). Se omitido, busca automática universal."
           ),
       }),
-      execute: async ({ query, numResults = 5, language }) => {
+      execute: async ({ query, numResults = 5, categories = "general,news", language }) => {
         try {
           const url = new URL("/search", config.searxng.baseUrl);
           url.searchParams.set("q", query);
           url.searchParams.set("format", "json");
+          if (categories) {
+            url.searchParams.set("categories", categories);
+          }
           if (language) {
             url.searchParams.set("language", language);
           }
