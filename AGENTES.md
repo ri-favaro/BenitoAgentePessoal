@@ -57,10 +57,14 @@ BenitoAgentePessoal/
 │       └── local-ai.md       # Diretrizes de IA local, limites de VRAM (12GB) e tool calling
 ├── tests/
 │   ├── test-search.ts        # Testes de integração da busca web, anti-loop e sanitização
-│   └── test-memory.ts        # Testes da memória modular, tool calling e consolidação com histórico
+│   ├── test-memory.ts        # Testes da memória modular, tool calling e consolidação com histórico
+│   └── test-telegram-utils.ts # Testes de utilitários do Telegram (whitelist, split de mensagens)
 └── src/
     ├── config.ts             # Leitura centralizada de variáveis de ambiente
     ├── cli.ts                # Terminal interativo com streaming, cores e comandos
+    ├── interfaces/           # Interfaces de comunicação externas
+    │   ├── telegram.ts       # Bot do Telegram (Long Polling, streaming debounced e comandos)
+    │   └── telegram-utils.ts # Helpers de whitelist, quebra de mensagens e feedback de tools
     ├── core/
     │   ├── agent.ts          # Loop do agente (streamText, histórico, maxSteps, poda de RAM/VRAM)
     │   └── llm.ts            # Factory de providers (Ollama, llama-server ou Gemini)
@@ -195,6 +199,6 @@ Ao adicionar uma nova ferramenta para o Benito:
 ## 🚀 Próximas Funcionalidades Sugeridas no Roadmap
 
 1. **[Concluído] Busca na Web & Leitura Profunda (SearXNG via Docker):** Ferramentas `search_web` e `fetch_web_page` com proteções anti-loop, sanitização temporal e heurística universal de idioma.
-2. **[Em Backlog - Issue #7] Gestão de Backlog no GitHub (`create_github_issue`):** Capacidade de o Benito refletir sobre suas próprias limitações e, sob autorização do usuário, abrir issues no repositório GitHub (`ri-favaro/BenitoAgentePessoal`).
-3. **Interface Telegram (grammY):** Criar um módulo opcional para conversar com o Benito pelo celular via bot do Telegram.
+2. **[Concluído - Issue #2] Interface Telegram (grammY):** Módulo `npm run telegram` para conversar com o Benito pelo celular via bot do Telegram com Long Polling, streaming e comandos nativos.
+3. **[Em Backlog - Issue #7] Gestão de Backlog no GitHub (`create_github_issue`):** Capacidade de o Benito refletir sobre suas próprias limitações e, sob autorização do usuário, abrir issues no repositório GitHub (`ri-favaro/BenitoAgentePessoal`).
 4. **Busca Semântica no Obsidian (RAG Local):** Indexar notas do Obsidian usando embeddings locais (`nomic-embed-text` ou `bge-m3` via Ollama) com LanceDB ou SQLite.

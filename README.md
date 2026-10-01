@@ -35,10 +35,14 @@ BenitoAgentePessoal/
 │       └── local-ai.md       # Diretrizes de IA local, limites de VRAM (12GB) e tool calling
 ├── tests/
 │   ├── test-search.ts        # Testes de busca web, sanitização e proteção anti-loop
-│   └── test-memory.ts        # Testes de memória modular e consolidação com histórico de sessão
+│   ├── test-memory.ts        # Testes de memória modular e consolidação com histórico de sessão
+│   └── test-telegram-utils.ts # Testes de utilitários do Telegram (whitelist, split de msgs)
 ├── src/
 │   ├── config.ts             # Configurações centralizadas via .env
 │   ├── cli.ts                # Interface interativa de terminal com streaming e cores
+│   ├── interfaces/           # Interfaces externas de acesso ao agente
+│   │   ├── telegram.ts       # Bot do Telegram (Long Polling, streaming e comandos)
+│   │   └── telegram-utils.ts # Helpers de whitelist, quebra de mensagens e feedback de tools
 │   ├── core/
 │   │   ├── agent.ts          # Orquestrador central (streaming, tool calling, poda de VRAM)
 │   │   └── llm.ts            # Conexão com Ollama, llama-server ou Gemini
@@ -108,22 +112,43 @@ docker compose up -d
 # Ou se já possuir o container no Docker:
 docker start searxng
 
-# (Opcional) Executar todos os testes automatizados (busca web + memória):
+# (Opcional) Executar todos os testes automatizados (busca web + memória + telegram):
 npm test
 
 # Ou individualmente:
 npm run test:search
 npm run test:memory
+npm run test:telegram
 ```
 
-### 4. Iniciar o Agente
+### 4. Iniciar o Agente via Terminal (CLI)
 ```powershell
 npm run dev
 ```
 
+### 5. Iniciar o Agente via Telegram (Acesso Remoto pelo Celular)
+Para conversar com o Benito de qualquer lugar pelo celular com acesso à mesma memória persistente e busca web:
+
+1. **Criar o Bot no Telegram:**
+   - Inicie uma conversa com o [@BotFather](https://t.me/BotFather) no Telegram.
+   - Envie `/newbot`, escolha o nome do bot (ex: `Benito`) e um username (ex: `meu_benito_bot`).
+   - Copie o token de acesso HTTP API gerado.
+2. **Obter seu ID de Usuário:**
+   - Inicie uma conversa com o [@userinfobot](https://t.me/userinfobot) no Telegram para ver seu `Id` numérico.
+3. **Configurar no arquivo `.env`:**
+   ```env
+   TELEGRAM_BOT_TOKEN=seu_token_fornecido_pelo_botfather
+   TELEGRAM_ALLOWED_USER_ID=seu_id_numerico
+   ```
+4. **Executar o Bot:**
+   ```powershell
+   npm run telegram
+   ```
+   *O bot se conecta automaticamente via Long Polling nativo (sem precisar abrir portas ou expor IP público), com streaming progressivo (debounce de 1.5s), whitelist estrita por ID e fila sequencial FIFO.*
+
 ---
 
-## 💡 Comandos no Chat
+## 💡 Comandos no Chat (CLI e Telegram)
 
 - `/memoria` — Mostra o que o Benito lembra sobre você (`memory/profile.md`).
 - `/regras` — Exibe a identidade, regras e diretrizes ativas (`memory/rules.md`).

@@ -26,6 +26,10 @@ export interface AppConfig {
     baseUrl: string;
   };
   memoryDir: string;
+  telegram: {
+    botToken: string;
+    allowedUserIds: number[];
+  };
 }
 
 export const config: AppConfig = {
@@ -53,5 +57,14 @@ export const config: AppConfig = {
     baseUrl: process.env.SEARXNG_BASE_URL || "http://localhost:8080",
   },
   memoryDir: path.resolve(process.cwd(), "memory"),
+  telegram: {
+    botToken: process.env.TELEGRAM_BOT_TOKEN || "",
+    allowedUserIds: (process.env.TELEGRAM_ALLOWED_USER_ID || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => Number(id))
+      .filter((id) => !isNaN(id)),
+  },
 };
 
