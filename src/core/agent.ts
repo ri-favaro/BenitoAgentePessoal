@@ -236,6 +236,29 @@ export class PersonalAgent {
       }
     }
 
+    // Se ferramentas foram executadas mas o modelo terminou mudo (sem síntese textual),
+    // sintetizamos automaticamente o resultado das ferramentas para nunca deixar o usuário sem resposta
+    if (!fullText.trim() && hadToolCalls) {
+      const toolSummaries: string[] = [];
+      for (const msg of this.messages.slice(-8)) {
+        if (msg.role === "tool" && Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if (part && typeof part === "object" && "result" in part) {
+              const res = part.result as Record<string, unknown>;
+              if (res && typeof res.message === "string") {
+                toolSummaries.push(res.message);
+              }
+            }
+          }
+        }
+      }
+      if (toolSummaries.length > 0) {
+        fullText = `Pronto! Operações realizadas com sucesso:\n• ${toolSummaries.join("\n• ")}`;
+        callbacks?.onToken?.(fullText);
+        this.messages.push({ role: "assistant", content: fullText });
+      }
+    }
+
     this.pruneOldMessages();
     return fullText;
   }

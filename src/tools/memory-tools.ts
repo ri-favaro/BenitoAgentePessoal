@@ -6,11 +6,11 @@ export function createMemoryTools(memoryManager: MemoryManager) {
   return {
     save_memory: tool({
       description:
-        "Salva uma nova informação biográfica, preferência pessoal duradoura ou nota sobre o usuário Luiz Ricardo em memory/profile.md.",
+        "Salva uma nova informação biográfica duradoura, preferência pessoal ou nota de projeto sobre o usuário Luiz Ricardo em memory/profile.md. NUNCA use para dados efêmeros, resultados de pesquisas na internet ou fatos de domínio público.",
       parameters: z.object({
         fact: z
           .string()
-          .describe("O fato objetivo ou preferência sobre o usuário a ser lembrada com clareza."),
+          .describe("O fato duradouro ou preferência sobre o usuário Luiz Ricardo a ser lembrado."),
         category: z
           .string()
           .optional()
@@ -26,12 +26,12 @@ export function createMemoryTools(memoryManager: MemoryManager) {
 
     save_learning: tool({
       description:
-        "Registra uma lição aprendida, feedback corretivo do usuário ou regra operacional permanente em memory/learnings.md. Use SEMPRE que o usuário te ensinar como agir, corrigir seu procedimento de busca ou exigir um comportamento de primeira para conversas futuras.",
+        "Registra uma lição aprendida, feedback corretivo do usuário ou regra operacional permanente em memory/learnings.md. Use EXCLUSIVAMENTE quando o usuário te ensinar como agir, corrigir seu procedimento de raciocínio/busca ou exigir uma regra de comportamento para conversas futuras. ATENÇÃO: NUNCA utilize esta ferramenta para salvar fatos pontuais, notícias, eventos, calendários de terceiros ou resultados de busca na web (esses dados são voláteis e devem ser buscados na internet sob demanda via search_web).",
       parameters: z.object({
         lesson: z
           .string()
           .describe(
-            "A diretriz prática ou lição aprendida que você deve seguir obrigatoriamente desde a primeira tentativa."
+            "A diretriz prática, conduta ou procedimento operacional (NUNCA dados factuais de eventos externos, datas ou calendários)."
           ),
         category: z
           .string()
@@ -92,14 +92,14 @@ export function createMemoryTools(memoryManager: MemoryManager) {
 
     save_topic_learning: tool({
       description:
-        "Salva uma regra prática ou aprendizado operacional diretamente dentro de um arquivo de tópico especializado em memory/topics/<slug>.md (ex: 'web-search', 'sports', 'coding'). Use para manter a memória limpa e modularizada por domínio.",
+        "Salva uma regra prática, heurística ou procedimento operacional diretamente dentro de um arquivo de tópico especializado em memory/topics/<slug>.md (ex: 'web-search', 'sports', 'coding'). NUNCA use para salvar dados factuais voláteis, notícias ou calendários (use apenas para heurísticas e procedimentos de como operar naquele domínio).",
       parameters: z.object({
         topicSlug: z
           .string()
           .describe("Slug do domínio/tópico em minúsculas sem espaços (ex: 'web-search', 'sports', 'coding')."),
         lesson: z
           .string()
-          .describe("A regra, procedimento ou lição a ser registrada para este tópico específico."),
+          .describe("A regra, procedimento ou heurística a ser registrada para este tópico específico."),
         title: z
           .string()
           .optional()

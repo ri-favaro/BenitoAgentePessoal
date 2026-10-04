@@ -8,9 +8,13 @@
     "dev": "tsx src/cli.ts",
     "start": "tsx src/cli.ts",
     "build": "tsc",
-    "test": "npm run test:search && npm run test:memory",
+    "test": "npm run test:filesystem && npm run test:finance && npm run test:search && npm run test:memory && npm run test:telegram",
+    "test:filesystem": "tsx tests/test-filesystem.ts",
+    "test:finance": "tsx tests/test-finance.ts",
     "test:search": "tsx tests/test-search.ts",
-    "test:memory": "tsx tests/test-memory.ts"
+    "test:memory": "tsx tests/test-memory.ts",
+    "test:telegram": "tsx tests/test-telegram-utils.ts",
+    "telegram": "tsx src/interfaces/telegram.ts"
   },
   "keywords": [
     "ai",
@@ -27,6 +31,7 @@
     "@ai-sdk/openai": "^1.2.0",
     "ai": "^4.1.54",
     "dotenv": "^16.4.7",
+    "grammy": "^1.46.0",
     "picocolors": "^1.1.1",
     "zod": "^3.24.2"
   },
@@ -36,4 +41,3 @@
     "typescript": "^5.8.2"
   }
 }
-

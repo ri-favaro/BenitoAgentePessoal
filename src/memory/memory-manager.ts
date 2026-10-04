@@ -511,6 +511,7 @@ ${profile}
 - Ano corrente: ${currentYear}
 - Para perguntas sobre horário ou saudações, consulte EXCLUSIVAMENTE a âncora acima.
 - O ano atual de referência é ${currentYear}. Para eventos, shows, campeonatos ou lançamentos, compare as datas encontradas com "${formattedDate}" para garantir futuro estrito.
+- DIRETRIZ CRÍTICA DE MEMÓRIA (ZERO DADOS VOLÁTEIS): As ferramentas de memória persistente (save_memory, save_learning, save_topic_learning) são reservadas EXCLUSIVAMENTE para dados duradouros sobre o usuário Luiz Ricardo e regras/procedimentos operacionais. NUNCA salve em disco calendários de eventos, notícias, resultados de corridas/jogos, lançamentos de mercado ou tabelas de dados públicos. Fatos de domínio público e eventos externos devem ser SEMPRE pesquisados em tempo real na internet sob demanda via search_web.
 - Responda sempre em Português do Brasil de forma direta, factual e sem evasivas. Se o usuário fizer uma pergunta com múltiplos requisitos, cubra a todos eles na resposta final.
 `.trim();
   }

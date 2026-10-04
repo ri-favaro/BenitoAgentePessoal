@@ -26,6 +26,17 @@ export interface AppConfig {
     baseUrl: string;
   };
   memoryDir: string;
+  telegram: {
+    botToken: string;
+    allowedUserIds: number[];
+  };
+  filesystem: {
+    allowedPaths: string[];
+  };
+  finance: {
+    vaultPath: string;
+    financeDir: string;
+  };
 }
 
 export const config: AppConfig = {
@@ -53,5 +64,34 @@ export const config: AppConfig = {
     baseUrl: process.env.SEARXNG_BASE_URL || "http://localhost:8080",
   },
   memoryDir: path.resolve(process.cwd(), "memory"),
+  telegram: {
+    botToken: process.env.TELEGRAM_BOT_TOKEN || "",
+    allowedUserIds: (process.env.TELEGRAM_ALLOWED_USER_ID || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => Number(id))
+      .filter((id) => !isNaN(id)),
+  },
+  filesystem: {
+    allowedPaths: (process.env.ALLOWED_DIRECTORIES
+      ? process.env.ALLOWED_DIRECTORIES.split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [process.cwd()]
+    ).map((dir) => path.resolve(dir)),
+  },
+  finance: {
+    vaultPath: path.resolve(
+      process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal"
+    ),
+    financeDir: path.resolve(
+      process.env.OBSIDIAN_FINANCE_DIR ||
+        path.join(
+          process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal",
+          "Financas"
+        )
+    ),
+  },
 };
 
