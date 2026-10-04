@@ -288,6 +288,7 @@ async function main() {
       let accumulatedTokens = "";
       let activeToolStatus = "";
       let lastEditTime = Date.now();
+      let lastSentText = "⏳ Benito está pensando...";
       let editPending = false;
       let editTimer: NodeJS.Timeout | null = null;
 
@@ -303,6 +304,11 @@ async function main() {
 
         if (!contentToDisplay) {
           contentToDisplay = "⏳ Benito está pensando...";
+        }
+
+        // Se o conteúdo a ser exibido for exatamente idêntico ao já enviado, evita chamada redundante à API
+        if (contentToDisplay === lastSentText) {
+          return;
         }
 
         // Garante que o texto parcial não estoure o limite de 4000 caracteres
@@ -327,7 +333,12 @@ async function main() {
                 contentToDisplay,
                 { parse_mode: "Markdown" }
               );
-            } catch {
+            } catch (mdErr: any) {
+              const mdMsg = mdErr?.message || "";
+              if (mdMsg.includes("message is not modified")) {
+                lastSentText = contentToDisplay;
+                return;
+              }
               await ctx.api.editMessageText(
                 chatId,
                 placeholderMsg.message_id,
@@ -335,14 +346,15 @@ async function main() {
               );
             }
           }
+          lastSentText = contentToDisplay;
           lastEditTime = Date.now();
         } catch (editErr: any) {
-          // Ignora mensagens idênticas ou rate limit temporário
           const errMsg = editErr?.message || "";
-          if (
-            !errMsg.includes("message is not modified") &&
-            !errMsg.includes("retry after")
-          ) {
+          if (errMsg.includes("message is not modified")) {
+            lastSentText = contentToDisplay;
+            return;
+          }
+          if (!errMsg.includes("retry after")) {
             // Fallback para edição sem markdown
             try {
               await ctx.api.editMessageText(
@@ -350,8 +362,14 @@ async function main() {
                 placeholderMsg.message_id,
                 contentToDisplay
               );
+              lastSentText = contentToDisplay;
               lastEditTime = Date.now();
-            } catch {}
+            } catch (fallbackErr: any) {
+              const fbMsg = fallbackErr?.message || "";
+              if (fbMsg.includes("message is not modified")) {
+                lastSentText = contentToDisplay;
+              }
+            }
           }
         }
       };
@@ -396,21 +414,38 @@ async function main() {
         const finalText = finalResult.trim() || accumulatedTokens.trim() || "(Sem resposta gerada)";
         const chunks = splitTelegramMessage(finalText, 4000);
 
-        // Edita a mensagem inicial com a primeira parte
+        // Edita a mensagem inicial com a primeira parte (apenas se o texto for diferente do já exibido)
         if (placeholderMsg && chunks.length > 0) {
-          try {
-            await ctx.api.editMessageText(
-              chatId,
-              placeholderMsg.message_id,
-              chunks[0],
-              { parse_mode: "Markdown" }
-            );
-          } catch {
-            await ctx.api.editMessageText(
-              chatId,
-              placeholderMsg.message_id,
-              chunks[0]
-            );
+          if (chunks[0] !== lastSentText) {
+            try {
+              await ctx.api.editMessageText(
+                chatId,
+                placeholderMsg.message_id,
+                chunks[0],
+                { parse_mode: "Markdown" }
+              );
+              lastSentText = chunks[0];
+            } catch (finalMdErr: any) {
+              const mdMsg = finalMdErr?.message || "";
+              if (mdMsg.includes("message is not modified")) {
+                lastSentText = chunks[0];
+              } else {
+                try {
+                  await ctx.api.editMessageText(
+                    chatId,
+                    placeholderMsg.message_id,
+                    chunks[0]
+                  );
+                  lastSentText = chunks[0];
+                } catch (plainErr: any) {
+                  const plainMsg = plainErr?.message || "";
+                  if (!plainMsg.includes("message is not modified")) {
+                    throw plainErr;
+                  }
+                  lastSentText = chunks[0];
+                }
+              }
+            }
           }
         }
 

@@ -30,6 +30,13 @@ export interface AppConfig {
     botToken: string;
     allowedUserIds: number[];
   };
+  filesystem: {
+    allowedPaths: string[];
+  };
+  finance: {
+    vaultPath: string;
+    financeDir: string;
+  };
 }
 
 export const config: AppConfig = {
@@ -65,6 +72,26 @@ export const config: AppConfig = {
       .filter(Boolean)
       .map((id) => Number(id))
       .filter((id) => !isNaN(id)),
+  },
+  filesystem: {
+    allowedPaths: (process.env.ALLOWED_DIRECTORIES
+      ? process.env.ALLOWED_DIRECTORIES.split(",")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [process.cwd()]
+    ).map((dir) => path.resolve(dir)),
+  },
+  finance: {
+    vaultPath: path.resolve(
+      process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal"
+    ),
+    financeDir: path.resolve(
+      process.env.OBSIDIAN_FINANCE_DIR ||
+        path.join(
+          process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal",
+          "Financas"
+        )
+    ),
   },
 };
 

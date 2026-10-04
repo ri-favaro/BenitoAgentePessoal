@@ -21,3 +21,6 @@ Descrição: Diretrizes universais e estratégias para busca e leitura profunda
 - Quando o usuário sugerir uma correção, incorpore imediatamente o termo sugerido na busca.
 - RACIOCÍNIO CRONOLÓGICO: Ao listar ou responder sobre datas, turnês ou eventos futuros, ordene estritamente do menor para o maior (dia 1 -> dia 2 -> dia 7). NUNCA afirme que uma data menor ocorre após uma data maior no mesmo mês.
 - COMPLETUDE: Se a pergunta tiver múltiplos itens (ex: local, tempo de classificação e tempo de corrida), certifique-se de responder a todos eles explicitamente.
+- SEARXNG OFFLINE: Se o SearXNG local estiver offline ou inacessível, oriente o Luiz Ricardo a executar 'docker start searxng' ou 'docker compose up -d'.
+- LIMITES DE HARDWARE LOCAL: Ao pesquisar ou recomendar modelos de IA para uso local, respeite a GPU do Luiz Ricardo (RTX 4070 Ti de 12GB VRAM), priorizando modelos na faixa de até 9B para velocidade máxima ou 14B Q4 para capacidade máxima.
+
