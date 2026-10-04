@@ -3,9 +3,11 @@ import { stdin as input, stdout as output } from "node:process";
 import pc from "picocolors";
 import { PersonalAgent } from "./core/agent.js";
 import { config } from "./config.js";
+import { createFinanceTools, formatBRL, resolveMonthQuery } from "./tools/finance-tools.js";
 
 async function main() {
   const agent = new PersonalAgent();
+  const financeTools = createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths);
   const rl = readline.createInterface({ input, output });
 
   let agentName = await agent.memoryManager.getAgentName();
@@ -147,8 +149,76 @@ async function main() {
         continue;
       }
 
+      if (trimmed === "/financas" || trimmed.startsWith("/financas ")) {
+        console.log(pc.cyan("\n[📊 Consultando extrato financeiro no cofre do Obsidian...]"));
+        try {
+          const argsText = trimmed.replace("/financas", "").trim();
+          const query = resolveMonthQuery(argsText);
+
+          const summaryResult: any = await (financeTools.get_financial_summary as any).execute({
+            month: query.yearMonth,
+            wallet: query.wallet,
+          });
+
+          if (!summaryResult.success) {
+            console.log(pc.red(`\n✖ Erro ao consultar finanças: ${summaryResult.error}\n`));
+          } else {
+            console.log(pc.bold(pc.cyan(`\n=== 💰 EXTRATO FINANCEIRO - ${summaryResult.monthTitle.toUpperCase()} ===`)));
+            
+            if (summaryResult.wallets) {
+              for (const [wKey, wData] of Object.entries<any>(summaryResult.wallets)) {
+                if (wKey === "conta_corrente") {
+                  console.log(pc.bold("\n💳 Conta Corrente (Salário & Dinheiro Livre):"));
+                  console.log(pc.green(`  • Receitas:    ${formatBRL(wData.totalIncome)}`));
+                  console.log(pc.red(`  • Despesas:    ${formatBRL(wData.totalExpense)}`));
+                  console.log(pc.bold(`  • Saldo Livre: ${formatBRL(wData.balance)}`));
+                } else if (wKey === "va") {
+                  console.log(pc.bold("\n🍎 Vale Alimentação (VA):"));
+                  console.log(pc.green(`  • Benefício:   ${formatBRL(wData.totalIncome)}`));
+                  console.log(pc.red(`  • Gastos no VA: ${formatBRL(wData.totalExpense)}`));
+                  console.log(pc.bold(`  • Saldo Restante: ${formatBRL(wData.balance)}`));
+                } else {
+                  console.log(pc.bold(`\n📁 ${wData.label}:`));
+                  console.log(pc.green(`  • Entradas:    ${formatBRL(wData.totalIncome)}`));
+                  console.log(pc.red(`  • Saídas:      ${formatBRL(wData.totalExpense)}`));
+                  console.log(pc.bold(`  • Saldo:       ${formatBRL(wData.balance)}`));
+                }
+              }
+            } else {
+              console.log(pc.green(`• Receitas Totais:  ${summaryResult.totalIncome}`));
+              console.log(pc.red(`• Despesas Totais:  ${summaryResult.totalExpense}`));
+              console.log(pc.bold(`• Saldo Líquido:    ${summaryResult.balance}`));
+            }
+
+            if (summaryResult.masterBalances) {
+              console.log(pc.bold(pc.magenta("\n🏦 Saldos Acumulados (Saldo Mestre em Tempo Real):")));
+              for (const [, wState] of Object.entries<any>(summaryResult.masterBalances)) {
+                console.log(pc.magenta(`  • ${wState.label}: ${formatBRL(wState.balance)}`));
+              }
+            }
+
+            console.log(pc.yellow(`\n⏱️ Ritmo Médio (Conta Corrente): ${summaryResult.dailyBurnRate}/dia`));
+            if (summaryResult.burnAlert) {
+              console.log(pc.bold(pc.yellow(`\n${summaryResult.burnAlert}`)));
+            }
+            if (summaryResult.expenseCategories && summaryResult.expenseCategories.length > 0) {
+              console.log(pc.cyan("\nPrincipais Despesas por Categoria:"));
+              for (const cat of summaryResult.expenseCategories.slice(0, 5)) {
+                console.log(`  - ${cat.category}: ${cat.total}`);
+              }
+            }
+            console.log(pc.cyan("========================================================\n"));
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.log(pc.red(`\n✖ Erro: ${msg}\n`));
+        }
+        continue;
+      }
+
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
+        console.log(pc.bold("  /financas     ") + "- Exibe o extrato financeiro e saldo do mês no Obsidian");
         console.log(pc.bold("  /memoria      ") + "- Exibe o perfil e notas salvas sobre você");
         console.log(pc.bold("  /regras       ") + "- Exibe o nome e diretrizes ativas do agente");
         console.log(pc.bold("  /aprendizados ") + "- Exibe as lições aprendidas e feedbacks operacionais gerais");
@@ -225,6 +295,32 @@ async function main() {
           } else if (toolName === "list_memory_topics") {
             process.stdout.write(
               pc.dim(pc.magenta(`\n[📂 Memória: listando tópicos modulares]\n${agentName}: `))
+            );
+          } else if (toolName === "record_expense") {
+            const amount = (args as { amount?: number })?.amount || 0;
+            const desc = (args as { description?: string })?.description || "";
+            process.stdout.write(
+              pc.dim(pc.yellow(`\n[💸 Finanças: registrando despesa de ${formatBRL(amount)} ("${desc}")]\n${agentName}: `))
+            );
+          } else if (toolName === "record_income") {
+            const amount = (args as { amount?: number })?.amount || 0;
+            const desc = (args as { description?: string })?.description || "";
+            process.stdout.write(
+              pc.dim(pc.green(`\n[💰 Finanças: registrando receita de ${formatBRL(amount)} ("${desc}")]\n${agentName}: `))
+            );
+          } else if (toolName === "cancel_last_transaction") {
+            process.stdout.write(
+              pc.dim(pc.red(`\n[↩️ Finanças: desfazendo lançamento]\n${agentName}: `))
+            );
+          } else if (toolName === "adjust_wallet_balance") {
+            const w = (args as { wallet?: string })?.wallet || "carteira";
+            const amt = (args as { newBalance?: number })?.newBalance || 0;
+            process.stdout.write(
+              pc.dim(pc.yellow(`\n[⚖️ Finanças: ajustando saldo de ${w} para ${formatBRL(amt)}]\n${agentName}: `))
+            );
+          } else if (toolName === "get_financial_summary") {
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[📊 Finanças: consultando extrato no Obsidian]\n${agentName}: `))
             );
           }
         },

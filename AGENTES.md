@@ -39,7 +39,7 @@ src/
 ├── tools/            # Ferramentas expostas ao modelo (index.ts)
 │   ├── web-tools.ts        # Busca web (Tavily/SearXNG), Jina Reader e cache anti-loop
 │   ├── filesystem-tools.ts # Leitura/escrita de arquivos com sandbox
-│   ├── finance-tools.ts    # Registro de despesas e resumos mensais no Obsidian
+│   ├── finance-tools.ts    # Gestão financeira com carteiras (CC/VA), saldo mestre O(1) e conciliação no Obsidian
 │   ├── path-guard.ts       # Validação e restrição de diretórios autorizados
 │   └── memory-tools.ts     # Ferramentas para o modelo persistir fatos e aprendizados
 tests/                # Suíte de testes automatizados (filesystem, finance, search, memory, telegram)
@@ -54,6 +54,18 @@ memory/               # Memória persistente do Benito (profile.md, rules.md, le
 2. **Tipagem e Schemas:** Use sempre `tool()` do Vercel AI SDK com schemas `zod` estritos e descrições claras para cada parâmetro.
 3. **Sandbox Obrigatória:** Qualquer ferramenta que leia ou grave arquivos no disco DEVE obrigatoriamente validar o caminho via `validatePathInsideAllowed` (`path-guard.ts`).
 4. **Tratamento de Exceções:** Ferramentas nunca devem estourar exceções não tratadas; capture erros e retorne `{ success: false, error: msg }` para que o agente possa se recuperar.
+
+---
+
+## 💰 Módulo Financeiro & Arquitetura de Carteiras
+
+Ao implementar, estender ou manter recursos em `src/tools/finance-tools.ts`:
+
+1. **Snapshot Central em $O(1)$ (`Financas/saldo-mestre.md`):** É a única fonte da verdade do saldo cumulativo e patrimônio em tempo real. Nunca faça leituras encadeadas ou varreduras recursivas de notas passadas (`YYYY-MM.md`) para calcular saldos atuais.
+2. **Sincronização Atômica:** Qualquer operação de escrita (`record_income`, `record_expense`, `cancel_last_transaction`, `adjust_wallet_balance`) DEVE atualizar tanto a nota do mês (`YYYY-MM.md`) quanto o `saldo-mestre.md`.
+3. **Multi-Carteiras Dinâmico (Zero Hardcoding):** Carteiras são identificadas por chaves de string dinâmicas (`conta_corrente`, `va`, `vr`, etc.). Nunca utilize regras `switch/case` ou condicionais rígidos que impeçam o suporte a novas carteiras.
+4. **Precisão em Ponto Flutuante:** Realize toda a matemática financeira convertendo valores em reais para centavos inteiros (`Math.round(val * 100)`), dividindo por 100 apenas na exibição ou persistência.
+5. **Separação de Responsabilidades (Zero Poluição de Memória):** Diretrizes de comportamento do Benito sobre finanças ficam em `memory/rules.md`. NUNCA grave saldos, regras contábeis ou transações em `memory/profile.md` — finanças pertencem exclusivamente ao cofre de finanças e suas ferramentas.
 
 ---
 
