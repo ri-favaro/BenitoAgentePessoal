@@ -2,6 +2,7 @@ import { Bot } from "grammy";
 import pc from "picocolors";
 import { PersonalAgent } from "../core/agent.js";
 import { config } from "../config.js";
+import { createFinanceTools, formatBRL, resolveMonthQuery } from "../tools/finance-tools.js";
 import {
   isUserAuthorized,
   splitTelegramMessage,
@@ -20,6 +21,7 @@ async function main() {
   }
 
   const agent = new PersonalAgent();
+  const financeTools = createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths);
   const bot = new Bot(config.telegram.botToken);
 
   let agentName = await agent.memoryManager.getAgentName();
@@ -68,6 +70,7 @@ async function main() {
     await bot.api.setMyCommands([
       { command: "start", description: "Iniciar conversa com o Benito" },
       { command: "status", description: "Ver status do assistente e modelo ativo" },
+      { command: "financas", description: "Ver resumo financeiro e saldo do mês" },
       { command: "memoria", description: "Ver perfil e memórias gravadas" },
       { command: "regras", description: "Ver persona e regras ativas" },
       { command: "aprendizados", description: "Ver aprendizados operacionais" },
@@ -109,6 +112,7 @@ async function main() {
       `Estou conectado ao seu computador e pronto para ajudar com memória persistente, busca web e gerenciamento de notas.\n\n` +
       `*Comandos úteis:*\n` +
       `• /status - Ver modelo e status da sessão\n` +
+      `• /financas - Ver extrato financeiro e saldo do mês\n` +
       `• /memoria - Ver perfil gravado sobre você\n` +
       `• /regras - Ver persona e diretrizes ativas\n` +
       `• /aprendizados - Ver aprendizados acumulados\n` +
@@ -215,6 +219,85 @@ async function main() {
     }
   });
 
+  bot.command("financas", async (ctx) => {
+    try {
+      const rawText = ctx.message?.text || "";
+      const argsText = rawText.replace(/^\/financas(@\w+)?/i, "").trim();
+      const resolved = resolveMonthQuery(argsText);
+
+      const summaryResult: any = await (financeTools.get_financial_summary as any).execute({
+        month: resolved.yearMonth,
+        wallet: resolved.wallet,
+      });
+
+      if (!summaryResult.success) {
+        await ctx.reply(`❌ Erro ao consultar finanças: ${summaryResult.error}`);
+        return;
+      }
+
+      let msg = `💰 *Extrato Financeiro - ${summaryResult.monthTitle}*\n\n`;
+
+      if (summaryResult.wallets) {
+        for (const [wKey, wData] of Object.entries<any>(summaryResult.wallets)) {
+          if (wKey === "conta_corrente") {
+            msg += `💳 *Conta Corrente (Dinheiro Livre):*\n`;
+            msg += `• Receitas: ${formatBRL(wData.totalIncome)}\n`;
+            msg += `• Despesas: ${formatBRL(wData.totalExpense)}\n`;
+            msg += `• *Saldo Livre:* ${formatBRL(wData.balance)}\n\n`;
+          } else if (wKey === "va") {
+            msg += `🍎 *Vale Alimentação (VA):*\n`;
+            msg += `• Benefício: ${formatBRL(wData.totalIncome)}\n`;
+            msg += `• Gastos no VA: ${formatBRL(wData.totalExpense)}\n`;
+            msg += `• *Saldo VA:* ${formatBRL(wData.balance)}\n\n`;
+          } else {
+            msg += `📁 *${wData.label}:*\n`;
+            msg += `• Entradas: ${formatBRL(wData.totalIncome)} | Saídas: ${formatBRL(wData.totalExpense)}\n`;
+            msg += `• *Saldo:* ${formatBRL(wData.balance)}\n\n`;
+          }
+        }
+      } else {
+        msg += `🟢 *Receitas:* ${summaryResult.totalIncome}\n`;
+        msg += `🔴 *Despesas:* ${summaryResult.totalExpense}\n`;
+        msg += `⚖️ *Saldo Líquido:* ${summaryResult.balance}\n\n`;
+      }
+
+      if (summaryResult.masterBalances) {
+        msg += `🏦 *Saldos Acumulados (Saldo Mestre):*\n`;
+        for (const [, wState] of Object.entries<any>(summaryResult.masterBalances)) {
+          msg += `• ${wState.label}: *${formatBRL(wState.balance)}*\n`;
+        }
+        msg += `\n`;
+      }
+
+      msg += `⏱️ *Ritmo Médio (Conta Corrente):* ${summaryResult.dailyBurnRate}/dia\n`;
+
+      if (summaryResult.burnAlert) {
+        msg += `\n${summaryResult.burnAlert}\n`;
+      }
+
+      if (summaryResult.expenseCategories && summaryResult.expenseCategories.length > 0) {
+        msg += `\n📊 *Principais Despesas por Categoria:*\n`;
+        for (const cat of summaryResult.expenseCategories.slice(0, 5)) {
+          msg += `• ${cat.category}: ${cat.total}\n`;
+        }
+      }
+
+      if (summaryResult.recentTransactions && summaryResult.recentTransactions.length > 0) {
+        msg += `\n📝 *Últimos Lançamentos:*\n`;
+        for (const t of summaryResult.recentTransactions.slice(0, 3)) {
+          const typeIcon = t.type === "income" ? "🟢" : "🔴";
+          const walletIcon = t.wallet === "va" ? "🍎" : "💳";
+          msg += `• ${typeIcon} ${walletIcon} ${t.description}: ${formatBRL(t.amount)} (${t.category})\n`;
+        }
+      }
+
+      await safeReply(ctx, msg, { parse_mode: "Markdown" });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await ctx.reply(`❌ Erro ao carregar finanças: ${errorMsg}`);
+    }
+  });
+
   bot.command("limpar", async (ctx) => {
     agent.clearHistory();
     await ctx.reply("🧹 Histórico da conversa atual limpo com sucesso! Uma nova sessão foi iniciada.");
@@ -224,6 +307,7 @@ async function main() {
     const helpMsg =
       `📖 *Comandos Disponíveis:*\n\n` +
       `• /status - Ver status do assistente, modelo e busca\n` +
+      `• /financas - Ver extrato financeiro e saldo do mês\n` +
       `• /memoria - Ver perfil e fatos registrados sobre você\n` +
       `• /regras - Ver persona e diretrizes ativas do Benito\n` +
       `• /aprendizados - Ver feedbacks e lições aprendidas\n` +

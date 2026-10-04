@@ -12,4 +12,4 @@
 ## Projetos Atuais
 - **Projeto Agente Pessoal:** Desenvolvimento de um assistente de IA com memória local, suporte a LLM local (Ollama/llama.cpp) e ferramentas de automação.
 
-
+## Fatos e Notas Aprendidas

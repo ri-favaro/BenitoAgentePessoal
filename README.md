@@ -14,7 +14,7 @@ Um assistente pessoal inteligente, modular e extensível construído em **TypeSc
 - **Guarda de Síntese Final Obrigatória:** O agente garante matematicamente a entrega de uma resposta conclusiva após o uso de ferramentas, impedindo que o modelo fique mudo ou trave caso atinja o teto de passos (`maxSteps: 5`).
 - **Gerenciamento Eficiente de Contexto e VRAM:** Podagem automática de saídas de ferramentas antigas, condensação de Markdown com remoção de ruídos de imagem e janela deslizante suave, mantendo o Ollama rápido e leve na **RTX 4070 Ti (12GB)** com **Qwen 3.5 9B (24k)** ocupando apenas 6.3 GB de VRAM com 100% de offload na GPU.
 - **Sandbox de Segurança do Filesystem (`path-guard`):** Controle estrito de acesso a diretórios permitidos (`ALLOWED_DIRECTORIES`), impedindo leitura ou escrita arbitrária fora das pastas autorizadas.
-- **Ferramentas de Arquivo & Gestão Financeira no Obsidian:** Criação, leitura e listagem de notas reais (`write_file`, `read_file`, `list_directory`), além de ferramentas dedicadas de finanças (`record_expense` e `get_financial_summary`) integradas às notas mensais de controle no cofre do Obsidian.
+- **Gestão Financeira & Multi-Carteiras com Saldo Mestre no Obsidian:** Registro de despesas (`record_expense`), salários/benefícios (`record_income`), conciliação manual de saldo (`adjust_wallet_balance`), cancelamento de lançamentos acidentais (`cancel_last_transaction`), segregação de carteiras (`conta_corrente` vs `va`) e consolidação atômica em tempo real $O(1)$ no arquivo central `Financas/saldo-mestre.md`, com cálculo de ritmo de queima (*burn rate*) e alertas inteligentes.
 - **Provider Agnóstico:** Suporte a Ollama local, llama-server (`llama.cpp`) ou Google Gemini Free Tier via `.env`.
 
 ---
@@ -36,7 +36,7 @@ BenitoAgentePessoal/
 │       └── local-ai.md       # Diretrizes de IA local, limites de VRAM (12GB) e tool calling
 ├── tests/
 │   ├── test-filesystem.ts    # Testes de sandbox de filesystem e path-guard
-│   ├── test-finance.ts       # Testes de registro de despesas e cálculo de resumo financeiro
+│   ├── test-finance.ts       # Testes de multi-carteiras, saldo mestre, conciliação e histórico financeiro
 │   ├── test-search.ts        # Testes de busca web, sanitização e proteção anti-loop
 │   ├── test-memory.ts        # Testes de memória modular e consolidação com histórico de sessão
 │   └── test-telegram-utils.ts # Testes de utilitários do Telegram (whitelist, split de msgs)
@@ -54,7 +54,7 @@ BenitoAgentePessoal/
 │   └── tools/
 │       ├── index.ts          # Registro central de ferramentas
 │       ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (protegido por sandbox)
-│       ├── finance-tools.ts  # Registro de despesas e resumos financeiros no Obsidian
+│       ├── finance-tools.ts  # Gestão financeira com carteiras (CC/VA), saldo mestre O(1) e conciliação no Obsidian
 │       ├── path-guard.ts     # Validação de segurança e sandbox de caminhos permitidos
 │       ├── memory-tools.ts   # Gravação de fatos, tópicos e atualização de persona
 │       └── web-tools.ts      # Busca na internet via SearXNG local e cache anti-loop
@@ -168,6 +168,7 @@ OBSIDIAN_VAULT_PATH=G:\CofreObsidian\AgentePessoal
 
 ## 💡 Comandos no Chat (CLI e Telegram)
 
+- `/financas` — Exibe o extrato financeiro mensal segregado por carteiras (`conta_corrente` e `va`), ritmo diário e saldos acumulados em tempo real (`saldo-mestre.md`). Suporta argumentos como `/financas setembro` ou `/financas va`.
 - `/memoria` — Mostra o que o Benito lembra sobre você (`memory/profile.md`).
 - `/regras` — Exibe a identidade, regras e diretrizes ativas (`memory/rules.md`).
 - `/aprendizados` — Exibe as lições aprendidas e feedbacks operacionais gerais (`memory/learnings.md`).
@@ -177,6 +178,20 @@ OBSIDIAN_VAULT_PATH=G:\CofreObsidian\AgentePessoal
 - `/limpar` — Reseta a conversa atual sem perder a memória persistente.
 - `/sair` — Encerra o assistente.
 - `/ajuda` — Exibe os comandos disponíveis.
+
+---
+
+## 💰 Módulo Financeiro & Arquitetura de Carteiras
+
+O Benito possui um sistema financeiro integrado ao Obsidian com segregação matemática e snapshot de patrimônio em tempo real:
+
+- **Saldo Mestre (`Financas/saldo-mestre.md`):** Arquivo central mantido em $O(1)$ com a posição consolidada de cada carteira e patrimônio total rastreado, eliminando leituras recursivas frágeis de meses passados.
+- **Livro Razão Mensal (`Financas/YYYY-MM.md`):** Registro detalhado e auditável de cada movimentação do mês com metadados em JSON embutido (`METADATA`).
+- **Segregação Dinâmica de Carteiras:**
+  - `conta_corrente`: Salário líquido, contas fixas, transporte, lazer e despesas livres.
+  - `va`: Benefício mensal de Vale Alimentação e compras de alimentação, mantendo o saldo da conta corrente 100% protegido.
+- **Conciliação Manual (`adjust_wallet_balance`):** Permite calibrar o saldo de qualquer carteira imediatamente caso haja divergências com o extrato real do banco ou app de benefícios.
+- **Estorno Automático (`cancel_last_transaction`):** Desfaz o último lançamento do mês e reverte atomicamente o valor no Saldo Mestre.
 
 ---
 

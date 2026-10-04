@@ -55,6 +55,27 @@ export function formatToolFeedback(
       const fp = typeof args.filePath === "string" ? args.filePath : "";
       return `📖 Lendo arquivo: ${fp}...`;
     }
+    case "record_expense": {
+      const amount = typeof args.amount === "number" ? `R$ ${args.amount.toFixed(2)}` : "";
+      const desc = typeof args.description === "string" ? ` (${args.description})` : "";
+      return `💸 Registrando despesa: ${amount}${desc}...`;
+    }
+    case "record_income": {
+      const amount = typeof args.amount === "number" ? `R$ ${args.amount.toFixed(2)}` : "";
+      const desc = typeof args.description === "string" ? ` (${args.description})` : "";
+      return `💰 Registrando receita: ${amount}${desc}...`;
+    }
+    case "cancel_last_transaction": {
+      return `↩️ Cancelando lançamento financeiro anterior...`;
+    }
+    case "adjust_wallet_balance": {
+      const w = typeof args.wallet === "string" ? args.wallet : "carteira";
+      const amt = typeof args.newBalance === "number" ? ` para R$ ${args.newBalance.toFixed(2)}` : "";
+      return `⚖️ Ajustando saldo da carteira [${w}]${amt}...`;
+    }
+    case "get_financial_summary": {
+      return `📊 Consultando extrato financeiro no Obsidian...`;
+    }
     default:
       return `⚙️ Executando: ${toolName}...`;
   }
