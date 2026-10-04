@@ -13,7 +13,8 @@ Um assistente pessoal inteligente, modular e extensível construído em **TypeSc
 - **Leitura Profunda com Jina Reader (`r.jina.ai`) & Anti-Alucinação Estrita (`fetch_web_page`):** O agente renderiza o JavaScript de páginas e portais modernos (SPAs em React/Next.js) via Jina Reader, extraindo o Markdown limpo e tabelas completas com fallback local, além do bloqueio estrito de URLs inventadas pelo modelo fora dos resultados reais da busca.
 - **Guarda de Síntese Final Obrigatória:** O agente garante matematicamente a entrega de uma resposta conclusiva após o uso de ferramentas, impedindo que o modelo fique mudo ou trave caso atinja o teto de passos (`maxSteps: 5`).
 - **Gerenciamento Eficiente de Contexto e VRAM:** Podagem automática de saídas de ferramentas antigas, condensação de Markdown com remoção de ruídos de imagem e janela deslizante suave, mantendo o Ollama rápido e leve na **RTX 4070 Ti (12GB)** com **Qwen 3.5 9B (24k)** ocupando apenas 6.3 GB de VRAM com 100% de offload na GPU.
-- **Ferramentas de Arquivo (Integração com Obsidian):** Criação, leitura e listagem de notas reais no sistema de arquivos (`write_file`, `read_file`, `list_directory`).
+- **Sandbox de Segurança do Filesystem (`path-guard`):** Controle estrito de acesso a diretórios permitidos (`ALLOWED_DIRECTORIES`), impedindo leitura ou escrita arbitrária fora das pastas autorizadas.
+- **Ferramentas de Arquivo & Gestão Financeira no Obsidian:** Criação, leitura e listagem de notas reais (`write_file`, `read_file`, `list_directory`), além de ferramentas dedicadas de finanças (`record_expense` e `get_financial_summary`) integradas às notas mensais de controle no cofre do Obsidian.
 - **Provider Agnóstico:** Suporte a Ollama local, llama-server (`llama.cpp`) ou Google Gemini Free Tier via `.env`.
 
 ---
@@ -34,6 +35,8 @@ BenitoAgentePessoal/
 │       ├── sports.md         # Regras específicas de cronologia esportiva
 │       └── local-ai.md       # Diretrizes de IA local, limites de VRAM (12GB) e tool calling
 ├── tests/
+│   ├── test-filesystem.ts    # Testes de sandbox de filesystem e path-guard
+│   ├── test-finance.ts       # Testes de registro de despesas e cálculo de resumo financeiro
 │   ├── test-search.ts        # Testes de busca web, sanitização e proteção anti-loop
 │   ├── test-memory.ts        # Testes de memória modular e consolidação com histórico de sessão
 │   └── test-telegram-utils.ts # Testes de utilitários do Telegram (whitelist, split de msgs)
@@ -50,7 +53,9 @@ BenitoAgentePessoal/
 │   │   └── memory-manager.ts # Leitura e escrita dinâmica de memória e consolidação
 │   └── tools/
 │       ├── index.ts          # Registro central de ferramentas
-│       ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (Obsidian)
+│       ├── filesystem-tools.ts # Criação, leitura e listagem de arquivos (protegido por sandbox)
+│       ├── finance-tools.ts  # Registro de despesas e resumos financeiros no Obsidian
+│       ├── path-guard.ts     # Validação de segurança e sandbox de caminhos permitidos
 │       ├── memory-tools.ts   # Gravação de fatos, tópicos e atualização de persona
 │       └── web-tools.ts      # Busca na internet via SearXNG local e cache anti-loop
 ├── .env                      # Suas variáveis ativas (ignorado no git)
@@ -112,10 +117,12 @@ docker compose up -d
 # Ou se já possuir o container no Docker:
 docker start searxng
 
-# (Opcional) Executar todos os testes automatizados (busca web + memória + telegram):
+# (Opcional) Executar todos os testes automatizados (filesystem + finanças + busca web + memória + telegram):
 npm test
 
 # Ou individualmente:
+npm run test:filesystem
+npm run test:finance
 npm run test:search
 npm run test:memory
 npm run test:telegram
@@ -145,6 +152,17 @@ Para conversar com o Benito de qualquer lugar pelo celular com acesso à mesma m
    npm run telegram
    ```
    *O bot se conecta automaticamente via Long Polling nativo (sem precisar abrir portas ou expor IP público), com streaming progressivo (debounce de 1.5s), whitelist estrita por ID e fila sequencial FIFO.*
+
+### 6. Configurar Sandbox do Filesystem & Cofre do Obsidian (Opcional)
+Por segurança, o Benito opera em uma sandbox que bloqueia leituras e gravações fora das pastas autorizadas. Para habilitar o gerenciamento de notas e o módulo de finanças no Obsidian, configure no `.env`:
+
+```env
+# Diretórios permitidos para leitura e gravação (separados por vírgula)
+ALLOWED_DIRECTORIES=G:\ProjetosAleatorios\ProjetoAgentePessoal,G:\CofreObsidian\AgentePessoal
+
+# Caminho do cofre do Obsidian para notas e resumos financeiros mensais
+OBSIDIAN_VAULT_PATH=G:\CofreObsidian\AgentePessoal
+```
 
 ---
 
