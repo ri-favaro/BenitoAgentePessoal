@@ -11,6 +11,7 @@ dist/
 
 # Logs
 *.log
+logs/
 npm-debug.log*
 
 # SO e IDE

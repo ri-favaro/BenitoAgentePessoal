@@ -3,6 +3,33 @@ import { getLanguageModel } from "./llm.js";
 import { MemoryManager } from "../memory/memory-manager.js";
 import { getAgentTools } from "../tools/index.js";
 import { createWebToolsState } from "../tools/web-tools.js";
+import {
+  ReasoningStreamParser,
+  stripThinking,
+} from "./reasoning-parser.js";
+import { logReasoningAudit } from "./reasoning-logger.js";
+
+function sanitizeMessageForHistory(msg: CoreMessage): CoreMessage {
+  if (msg.role !== "assistant") return msg;
+  if (typeof msg.content === "string") {
+    return { ...msg, content: stripThinking(msg.content) };
+  }
+  if (Array.isArray(msg.content)) {
+    const newParts = msg.content.map((part: any) => {
+      if (
+        part &&
+        typeof part === "object" &&
+        part.type === "text" &&
+        typeof part.text === "string"
+      ) {
+        return { ...part, text: stripThinking(part.text) };
+      }
+      return part;
+    });
+    return { ...msg, content: newParts };
+  }
+  return msg;
+}
 
 export class PersonalAgent {
   private messages: CoreMessage[] = [];
@@ -15,12 +42,16 @@ export class PersonalAgent {
 
   /**
    * Otimiza a memória RAM e VRAM do modelo podando resultados antigos de ferramentas
-   * (como páginas web inteiras) para que a janela de contexto do Ollama não estoure.
+   * (como páginas web inteiras) para que a janela de contexto do Ollama não estoure,
+   * e assegura que mensagens antigas estejam livres de blocos <thinking>.
    */
   private pruneOldMessages(): void {
     let toolResultCount = 0;
     for (let i = this.messages.length - 1; i >= 0; i--) {
       const msg = this.messages[i];
+      if (msg.role === "assistant") {
+        this.messages[i] = sanitizeMessageForHistory(msg);
+      }
       if (msg.role === "tool" && Array.isArray(msg.content)) {
         toolResultCount++;
         // Mantém íntegro apenas o resultado mais recente (do turno atual).
@@ -57,15 +88,22 @@ export class PersonalAgent {
     userInput: string,
     callbacks?: {
       onToken?: (chunk: string) => void;
+      onThoughtToken?: (chunk: string) => void;
       onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
     }
   ): Promise<string> {
+    const startTime = Date.now();
     this.pruneOldMessages();
     this.messages.push({ role: "user", content: userInput });
 
     const systemPrompt = await this.memoryManager.buildSystemPrompt();
     const model = getLanguageModel();
     const tools = getAgentTools(this.memoryManager, this.webToolsState);
+
+    const parser = new ReasoningStreamParser({
+      onThoughtChunk: (chunk) => callbacks?.onThoughtToken?.(chunk),
+      onResponseChunk: (chunk) => callbacks?.onToken?.(chunk),
+    });
 
     let hadToolCalls = false;
     const result = streamText({
@@ -74,6 +112,7 @@ export class PersonalAgent {
       messages: this.messages,
       tools,
       maxSteps: 5,
+      temperature: 0.25,
       onStepFinish: (step) => {
         if (step.toolCalls && step.toolCalls.length > 0) {
           hadToolCalls = true;
@@ -90,7 +129,7 @@ export class PersonalAgent {
     let fullText = "";
     for await (const chunk of result.textStream) {
       fullText += chunk;
-      callbacks?.onToken?.(chunk);
+      parser.processChunk(chunk);
     }
 
     let finishReason = "";
@@ -101,12 +140,19 @@ export class PersonalAgent {
     try {
       const response = await result.response;
       if (response && response.messages && response.messages.length > 0) {
-        this.messages.push(...response.messages);
+        const sanitized = response.messages.map(sanitizeMessageForHistory);
+        this.messages.push(...sanitized);
       } else {
-        this.messages.push({ role: "assistant", content: fullText });
+        this.messages.push({
+          role: "assistant",
+          content: stripThinking(fullText),
+        });
       }
     } catch {
-      this.messages.push({ role: "assistant", content: fullText });
+      this.messages.push({
+        role: "assistant",
+        content: stripThinking(fullText),
+      });
     }
 
     // Guarda Anti-Estagnação: Se o modelo prometeu buscar/ler em texto mas não chamou
@@ -127,6 +173,7 @@ export class PersonalAgent {
         messages: this.messages,
         tools,
         maxSteps: 4,
+        temperature: 0.2,
         onStepFinish: (step) => {
           if (step.toolCalls && step.toolCalls.length > 0) {
             for (const call of step.toolCalls) {
@@ -140,10 +187,10 @@ export class PersonalAgent {
       });
 
       let contText = "";
-      callbacks?.onToken?.("\n");
+      parser.processChunk("\n");
       for await (const chunk of continuation.textStream) {
         contText += chunk;
-        callbacks?.onToken?.(chunk);
+        parser.processChunk(chunk);
       }
       fullText += "\n" + contText;
 
@@ -154,12 +201,19 @@ export class PersonalAgent {
           contResponse.messages &&
           contResponse.messages.length > 0
         ) {
-          this.messages.push(...contResponse.messages);
+          const sanitized = contResponse.messages.map(sanitizeMessageForHistory);
+          this.messages.push(...sanitized);
         } else {
-          this.messages.push({ role: "assistant", content: contText });
+          this.messages.push({
+            role: "assistant",
+            content: stripThinking(contText),
+          });
         }
       } catch {
-        this.messages.push({ role: "assistant", content: contText });
+        this.messages.push({
+          role: "assistant",
+          content: stripThinking(contText),
+        });
       }
     }
 
@@ -182,6 +236,19 @@ export class PersonalAgent {
       }
     }
 
+    // Remove mensagens vazias do assistente no final do histórico para permitir que o modelo sintetize
+    while (
+      this.messages.length > 0 &&
+      this.messages[this.messages.length - 1].role === "assistant" &&
+      (!this.messages[this.messages.length - 1].content ||
+        (typeof this.messages[this.messages.length - 1].content === "string" &&
+          !(this.messages[this.messages.length - 1].content as string).trim()) ||
+        (Array.isArray(this.messages[this.messages.length - 1].content) &&
+          (this.messages[this.messages.length - 1].content as any[]).length === 0))
+    ) {
+      this.messages.pop();
+    }
+
     // Guarda de Síntese Final Obrigatória:
     // Se o ciclo de passos terminou num resultado de ferramenta (sem mensagem final do assistente),
     // ou se o modelo chamou ferramentas e terminou mudo,
@@ -189,7 +256,7 @@ export class PersonalAgent {
     // forçamos uma geração final direta SEM ferramentas para responder imediatamente ao usuário.
     const lastMessage = this.messages[this.messages.length - 1];
     const endsWithTool = lastMessage && lastMessage.role === "tool";
-    const trimmedFull = fullText.trim();
+    const trimmedFull = stripThinking(fullText).trim();
     const isTruncated =
       finishReason === "length" ||
       (hadToolCalls && trimmedFull.length > 0 && trimmedFull.length < 80 && !/[.!?:]$/.test(trimmedFull));
@@ -197,9 +264,9 @@ export class PersonalAgent {
 
     if (needsSynthesis) {
       if (trimmedFull.length > 0) {
-        callbacks?.onToken?.(" ");
+        parser.processChunk(" ");
       } else {
-        callbacks?.onToken?.("\n");
+        parser.processChunk("\n");
       }
 
       const synthesisPrompt =
@@ -213,12 +280,13 @@ export class PersonalAgent {
         model,
         system: synthesisPrompt,
         messages: this.messages,
+        temperature: 0.25,
       });
 
       let synthText = "";
       for await (const chunk of synthesis.textStream) {
         synthText += chunk;
-        callbacks?.onToken?.(chunk);
+        parser.processChunk(chunk);
       }
 
       if (synthText.trim()) {
@@ -226,19 +294,29 @@ export class PersonalAgent {
         try {
           const synthResp = await synthesis.response;
           if (synthResp && synthResp.messages && synthResp.messages.length > 0) {
-            this.messages.push(...synthResp.messages);
+            const sanitized = synthResp.messages.map(sanitizeMessageForHistory);
+            this.messages.push(...sanitized);
           } else {
-            this.messages.push({ role: "assistant", content: synthText });
+            this.messages.push({
+              role: "assistant",
+              content: stripThinking(synthText),
+            });
           }
         } catch {
-          this.messages.push({ role: "assistant", content: synthText });
+          this.messages.push({
+            role: "assistant",
+            content: stripThinking(synthText),
+          });
         }
       }
     }
 
+    const { thought, cleanResponse } = parser.finish();
+    let finalCleanText = cleanResponse || stripThinking(fullText).trim();
+
     // Se ferramentas foram executadas mas o modelo terminou mudo (sem síntese textual),
     // sintetizamos automaticamente o resultado das ferramentas para nunca deixar o usuário sem resposta
-    if (!fullText.trim() && hadToolCalls) {
+    if (!finalCleanText && hadToolCalls) {
       const toolSummaries: string[] = [];
       for (const msg of this.messages.slice(-8)) {
         if (msg.role === "tool" && Array.isArray(msg.content)) {
@@ -253,14 +331,23 @@ export class PersonalAgent {
         }
       }
       if (toolSummaries.length > 0) {
-        fullText = `Pronto! Operações realizadas com sucesso:\n• ${toolSummaries.join("\n• ")}`;
-        callbacks?.onToken?.(fullText);
-        this.messages.push({ role: "assistant", content: fullText });
+        finalCleanText = `Pronto! Operações realizadas com sucesso:\n• ${toolSummaries.join("\n• ")}`;
+        callbacks?.onToken?.(finalCleanText);
+        this.messages.push({ role: "assistant", content: finalCleanText });
       }
     }
 
+    // Auditoria de cada turno (logs/reasoning.log)
+    await logReasoningAudit({
+      timestamp: new Date().toISOString(),
+      userInput,
+      thought: thought || "(Nenhum bloco de raciocínio intermediário detectado neste turno)",
+      cleanResponse: finalCleanText,
+      durationMs: Date.now() - startTime,
+    });
+
     this.pruneOldMessages();
-    return fullText;
+    return finalCleanText;
   }
 
   clearHistory(): void {

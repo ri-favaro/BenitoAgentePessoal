@@ -480,6 +480,10 @@ async function main() {
         console.log(pc.cyan(`\n[Telegram] Mensagem recebida: "${userInput}"`));
 
         const finalResult = await agent.ask(userInput, {
+          onThoughtToken: (_thoughtChunk) => {
+            // Silencia os tokens de monólogo interno no chat do Telegram,
+            // mantendo o placeholder '⏳ Benito está pensando...' ativo sem poluir a interface
+          },
           onToken: (chunk) => {
             accumulatedTokens += chunk;
             scheduleEdit(false);
