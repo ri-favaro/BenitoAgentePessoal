@@ -5,6 +5,42 @@ import { PersonalAgent } from "./core/agent.js";
 import { config } from "./config.js";
 import { createFinanceTools, formatBRL, resolveMonthQuery } from "./tools/finance-tools.js";
 
+async function readInputWithPasteSupport(
+  rl: readline.Interface,
+  promptText: string
+): Promise<string> {
+  const firstLine = await rl.question(promptText);
+  if (!firstLine.trim() || firstLine.trim().startsWith("/")) {
+    return firstLine;
+  }
+
+  const lines: string[] = [firstLine];
+
+  return new Promise((resolve) => {
+    let timeout: NodeJS.Timeout | null = null;
+
+    const onLine = (line: string) => {
+      lines.push(line);
+      resetTimer();
+    };
+
+    const cleanup = () => {
+      rl.removeListener("line", onLine);
+    };
+
+    const resetTimer = () => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        cleanup();
+        resolve(lines.join("\n"));
+      }, 80);
+    };
+
+    rl.on("line", onLine);
+    resetTimer();
+  });
+}
+
 async function main() {
   const agent = new PersonalAgent();
   const financeTools = createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths);
@@ -37,7 +73,7 @@ async function main() {
   while (true) {
     let userInput: string;
     try {
-      userInput = await rl.question(pc.bold(pc.green("Você: ")));
+      userInput = await readInputWithPasteSupport(rl, pc.bold(pc.green("Você: ")));
     } catch {
       // stdin encerrado ou terminal fechado
       break;
@@ -232,13 +268,30 @@ async function main() {
 
       // Atualiza o nome caso tenha sido alterado dinamicamente
       agentName = await agent.memoryManager.getAgentName();
-      process.stdout.write(pc.bold(pc.cyan(`${agentName}: `)));
+
+      let hasPrintedThoughtHeader = false;
+      let hasPrintedResponseHeader = false;
 
       await agent.ask(trimmed, {
+        onThoughtToken: (token) => {
+          if (!hasPrintedThoughtHeader) {
+            process.stdout.write(pc.dim(pc.gray(`💭 Pensando:\n`)));
+            hasPrintedThoughtHeader = true;
+          }
+          process.stdout.write(pc.dim(pc.gray(token)));
+        },
         onToken: (token) => {
+          if (!hasPrintedResponseHeader) {
+            if (hasPrintedThoughtHeader) {
+              process.stdout.write("\n\n");
+            }
+            process.stdout.write(pc.bold(pc.cyan(`${agentName}: `)));
+            hasPrintedResponseHeader = true;
+          }
           process.stdout.write(token);
         },
         onToolCall: (toolName, args) => {
+          hasPrintedResponseHeader = true;
           if (toolName === "save_memory") {
             const fact = (args as { fact?: string })?.fact || "";
             process.stdout.write(

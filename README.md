@@ -11,6 +11,10 @@ Um assistente pessoal inteligente, modular e extensível construído em **TypeSc
 - **Consolidação Inteligente de Sessão (`/consolidar`):** O comando analisa a conversa recente em tempo real (`agent.getHistory()`), extrai novas preferências, planos e decisões técnicas, atualiza os arquivos em disco e gera um resumo dinâmico e contextual.
 - **Busca Web com Tavily AI Search & SearXNG Fallback:** Integração de alto nível com a **Tavily Search API** (otimizada para agentes de IA com respostas diretas sintetizadas, tabelas e snippets ricos) e fallback automático para o **SearXNG** local (porta 8080). Inclui sanitização estrutural, bloqueio de buscas idênticas consecutivas, cache de URLs que falharam e a **Regra Universal de Idioma** (buscas prioritárias em inglês para dados técnicos/globais, entregando a resposta traduzida em Português).
 - **Leitura Profunda com Jina Reader (`r.jina.ai`) & Anti-Alucinação Estrita (`fetch_web_page`):** O agente renderiza o JavaScript de páginas e portais modernos (SPAs em React/Next.js) via Jina Reader, extraindo o Markdown limpo e tabelas completas com fallback local, além do bloqueio estrito de URLs inventadas pelo modelo fora dos resultados reais da busca.
+- **Decoupled Reasoning & Intent Expansion (`<thinking>`):** Implementação de raciocínio intermediário com monólogo interno obrigatório antes de respostas e chamadas de ferramentas. Força o modelo local (Qwen 9B) a desconstruir intenções implícitas, checar regras de segurança/sandbox/carteiras e traçar um plano de ação direto.
+- **Streaming Parser com FSM & Higienização de VRAM:** Máquina de estados em streaming (`ReasoningStreamParser`) que separa em tempo real o bloco de pensamento da resposta conclusiva. Renderiza o pensamento em cinza suave (`dimmed`) no terminal CLI, silencia o rascunho no Telegram e higieniza todas as mensagens em `this.messages` para poupar tokens na janela de 24k da GPU.
+- **Suporte Nativo a Colagem Multi-linha no CLI (`readInputWithPasteSupport`):** Buffer inteligente no terminal que detecta pacotes de colagem rápida (*paste burst*), permitindo colar perguntas com alternativas, blocos de código ou parágrafos inteiros sem corte na primeira quebra de linha (`\n`).
+- **Auditoria Contínua em JSONL (`logs/reasoning.log`):** Gravação persistente e assíncrona de cada turno da conversa com timestamp, prompt do usuário, monólogo interno, resposta limpa e tempo de latência em milissegundos.
 - **Guarda de Síntese Final Obrigatória:** O agente garante matematicamente a entrega de uma resposta conclusiva após o uso de ferramentas, impedindo que o modelo fique mudo ou trave caso atinja o teto de passos (`maxSteps: 5`).
 - **Gerenciamento Eficiente de Contexto e VRAM:** Podagem automática de saídas de ferramentas antigas, condensação de Markdown com remoção de ruídos de imagem e janela deslizante suave, mantendo o Ollama rápido e leve na **RTX 4070 Ti (12GB)** com **Qwen 3.5 9B (24k)** ocupando apenas 6.3 GB de VRAM com 100% de offload na GPU.
 - **Sandbox de Segurança do Filesystem (`path-guard`):** Controle estrito de acesso a diretórios permitidos (`ALLOWED_DIRECTORIES`), impedindo leitura ou escrita arbitrária fora das pastas autorizadas.
@@ -35,19 +39,24 @@ BenitoAgentePessoal/
 │       ├── sports.md         # Regras específicas de cronologia esportiva
 │       └── local-ai.md       # Diretrizes de IA local, limites de VRAM (12GB) e tool calling
 ├── tests/
+│   ├── test-reasoning.ts     # Testes de streaming parser, intent expansion e gravação JSONL
 │   ├── test-filesystem.ts    # Testes de sandbox de filesystem e path-guard
 │   ├── test-finance.ts       # Testes de multi-carteiras, saldo mestre, conciliação e histórico financeiro
 │   ├── test-search.ts        # Testes de busca web, sanitização e proteção anti-loop
 │   ├── test-memory.ts        # Testes de memória modular e consolidação com histórico de sessão
 │   └── test-telegram-utils.ts # Testes de utilitários do Telegram (whitelist, split de msgs)
+├── logs/
+│   └── reasoning.log         # Auditoria estruturada de raciocínio e intenções (JSONL)
 ├── src/
 │   ├── config.ts             # Configurações centralizadas via .env
-│   ├── cli.ts                # Interface interativa de terminal com streaming e cores
+│   ├── cli.ts                # Interface interativa de terminal com streaming, cores e suporte multi-linha
 │   ├── interfaces/           # Interfaces externas de acesso ao agente
 │   │   ├── telegram.ts       # Bot do Telegram (Long Polling, streaming e comandos)
 │   │   └── telegram-utils.ts # Helpers de whitelist, quebra de mensagens e feedback de tools
 │   ├── core/
 │   │   ├── agent.ts          # Orquestrador central (streaming, tool calling, poda de VRAM)
+│   │   ├── reasoning-parser.ts # Parser FSM de streaming para <thinking> e <think>
+│   │   ├── reasoning-logger.ts # Gravador de auditoria persistente em JSONL
 │   │   └── llm.ts            # Conexão com Ollama, llama-server ou Gemini
 │   ├── memory/
 │   │   └── memory-manager.ts # Leitura e escrita dinâmica de memória e consolidação
@@ -121,6 +130,7 @@ docker start searxng
 npm test
 
 # Ou individualmente:
+npm run test:reasoning
 npm run test:filesystem
 npm run test:finance
 npm run test:search

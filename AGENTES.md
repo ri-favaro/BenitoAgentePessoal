@@ -33,8 +33,8 @@ Este documento orienta desenvolvedores e agentes de IA que forem trabalhar na ma
 
 ```
 src/
-├── core/             # Orquestração do agente (agent.ts) e factory de LLMs (llm.ts)
-├── interfaces/       # Terminal interativo (cli.ts) e bot do Telegram (telegram.ts, telegram-utils.ts)
+├── core/             # Orquestração (agent.ts), parser FSM (reasoning-parser.ts), auditoria (reasoning-logger.ts) e llm.ts
+├── interfaces/       # Terminal interativo com paste multi-linha (cli.ts) e bot do Telegram (telegram.ts, telegram-utils.ts)
 ├── memory/           # MemoryManager (leitura de Markdown, tópicos modulares e /consolidar)
 ├── tools/            # Ferramentas expostas ao modelo (index.ts)
 │   ├── web-tools.ts        # Busca web (Tavily/SearXNG), Jina Reader e cache anti-loop
@@ -42,9 +42,29 @@ src/
 │   ├── finance-tools.ts    # Gestão financeira com carteiras (CC/VA), saldo mestre O(1) e conciliação no Obsidian
 │   ├── path-guard.ts       # Validação e restrição de diretórios autorizados
 │   └── memory-tools.ts     # Ferramentas para o modelo persistir fatos e aprendizados
-tests/                # Suíte de testes automatizados (filesystem, finance, search, memory, telegram)
+logs/                 # Auditoria contínua de raciocínio e intenções (reasoning.log JSONL)
+tests/                # Suíte de testes automatizados (reasoning, filesystem, finance, search, memory, telegram)
 memory/               # Memória persistente do Benito (profile.md, rules.md, learnings.md, topics/)
 ```
+
+---
+
+## 🧠 Padrão de Raciocínio Desacoplado & Intent Expansion (Decoupled Reasoning)
+
+Ao manter ou evoluir a orquestração cognitiva do Benito:
+
+1. **Monólogo Interno Obrigatório (`<thinking>...</thinking>`):**
+   - Injetado no topo do `buildSystemPrompt()` (`memory-manager.ts`).
+   - Força o modelo local (Qwen 9B) a desconstruir intenções implícitas, checar regras de segurança/sandbox/carteiras e traçar um plano de ação direto antes de agir ou responder.
+2. **Streaming Parser com FSM (`src/core/reasoning-parser.ts`):**
+   - O fluxo de tokens é desmembrado em tempo real sem adicionar latência.
+   - Suporta `<thinking>` e `<think>` (compatível com modelos nativos como DeepSeek/QwQ), múltiplos blocos (`maxSteps`) e recuperação graciosa de tags não fechadas.
+3. **Higienização de Memória & VRAM (`this.messages`):**
+   - Mensagens salvas em `this.messages` NUNCA devem reter blocos `<thinking>`. Use sempre `stripThinking()` antes de gravar no histórico para poupar a janela de 24k da GPU.
+4. **Auditoria Contínua (`src/core/reasoning-logger.ts`):**
+   - Todo turno da conversa grava assincronamente em `logs/reasoning.log` no formato JSONL (`timestamp`, `userInput`, `thought`, `cleanResponse`, `durationMs`).
+5. **Suporte a Colagem Multi-linha no CLI (`readInputWithPasteSupport`):**
+   - O `readline` padrão do Node.js trunca no primeiro `\n`. O CLI utiliza `readInputWithPasteSupport` com detecção de *paste burst* para capturar blocos completos (questões com alternativas, código ou parágrafos) sem truncamento.
 
 ---
 
