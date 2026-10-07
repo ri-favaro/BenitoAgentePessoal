@@ -4,15 +4,59 @@ import { createMemoryTools } from "./memory-tools.js";
 import { createFilesystemTools } from "./filesystem-tools.js";
 import { createWebTools, type WebToolsSessionState } from "./web-tools.js";
 import { createFinanceTools } from "./finance-tools.js";
+import { createRetrievalTools } from "./retrieval-tools.js";
+import { createAuditTools } from "./audit-tools.js";
+import { EmbeddingService } from "../core/embedding-service.js";
+import { VectorStore } from "../core/vector-store.js";
+import { KnowledgeIndexer } from "../core/indexer.js";
+import { SelfAuditor } from "../core/self-auditor.js";
+
+// Instâncias compartilhadas para o ciclo de vida das ferramentas
+let sharedVectorStore: VectorStore | null = null;
+let sharedEmbeddingService: EmbeddingService | null = null;
+let sharedIndexer: KnowledgeIndexer | null = null;
+let sharedAuditor: SelfAuditor | null = null;
+
+function getSharedRetrievalInstances() {
+  if (!sharedVectorStore) {
+    sharedVectorStore = new VectorStore(config.vectorStore.dbPath);
+  }
+  if (!sharedEmbeddingService) {
+    sharedEmbeddingService = new EmbeddingService();
+  }
+  if (!sharedIndexer) {
+    sharedIndexer = new KnowledgeIndexer(sharedEmbeddingService, sharedVectorStore);
+  }
+  if (!sharedAuditor) {
+    sharedAuditor = new SelfAuditor();
+  }
+  return {
+    vectorStore: sharedVectorStore,
+    embeddingService: sharedEmbeddingService,
+    indexer: sharedIndexer,
+    auditor: sharedAuditor,
+  };
+}
 
 export function getAgentTools(
   memoryManager: MemoryManager,
   webToolsState?: WebToolsSessionState
 ) {
+  const { vectorStore, embeddingService, indexer, auditor } =
+    getSharedRetrievalInstances();
+
   return {
     ...createMemoryTools(memoryManager),
     ...createFilesystemTools(config.filesystem.allowedPaths),
     ...createWebTools(webToolsState),
     ...createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths),
+    ...createRetrievalTools(
+      vectorStore,
+      embeddingService,
+      indexer,
+      config.filesystem.allowedPaths,
+      config.finance.vaultPath
+    ),
+    ...createAuditTools(auditor),
   };
 }

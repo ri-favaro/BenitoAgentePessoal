@@ -4,6 +4,10 @@ import pc from "picocolors";
 import { PersonalAgent } from "./core/agent.js";
 import { config } from "./config.js";
 import { createFinanceTools, formatBRL, resolveMonthQuery } from "./tools/finance-tools.js";
+import { SelfAuditor } from "./core/self-auditor.js";
+import { KnowledgeIndexer } from "./core/indexer.js";
+import { EmbeddingService } from "./core/embedding-service.js";
+import { VectorStore } from "./core/vector-store.js";
 
 async function readInputWithPasteSupport(
   rl: readline.Interface,
@@ -44,6 +48,10 @@ async function readInputWithPasteSupport(
 async function main() {
   const agent = new PersonalAgent();
   const financeTools = createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths);
+  const auditor = new SelfAuditor();
+  const embeddingService = new EmbeddingService();
+  const vectorStore = new VectorStore();
+  const indexer = new KnowledgeIndexer(embeddingService, vectorStore);
   const rl = readline.createInterface({ input, output });
 
   let agentName = await agent.memoryManager.getAgentName();
@@ -67,8 +75,9 @@ async function main() {
       ? `Tavily AI Search (api.tavily.com)`
       : `SearXNG (${config.searxng.baseUrl})`;
   console.log(pc.gray(`• Busca Web: `) + pc.blue(searchDesc));
+  console.log(pc.gray(`• Embeddings: `) + pc.cyan(`${config.embedding.baseUrl} (${config.embedding.model})`));
   console.log(pc.gray("--------------------------------------------------"));
-  console.log(pc.dim("Comandos especiais: /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
+  console.log(pc.dim("Comandos especiais: /financas, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
   console.log("");
   while (true) {
     let userInput: string;
@@ -252,9 +261,106 @@ async function main() {
         continue;
       }
 
+      if (trimmed === "/auditar") {
+        console.log(pc.cyan("\n[🛡️ Executando auto-auditoria holística do projeto...]"));
+        try {
+          const report = await auditor.runAudit();
+          console.log(pc.bold(pc.cyan(`\n=== 🛡️ RELATÓRIO DE AUTO-AUDITORIA (${report.timestamp}) ===`)));
+          
+          console.log(pc.bold("\n⏱️ Performance & Raciocínio (logs/reasoning.log):"));
+          console.log(`  • Turnos analisados:     ${report.performance.totalTurns}`);
+          console.log(`  • Duração média:         ${report.performance.avgDurationMs}ms`);
+          console.log(`  • Turnos lentos (> 15s): ${report.performance.slowTurnsCount}`);
+
+          console.log(pc.bold("\n🛡️ Conformidade de Sandbox (path-guard em src/tools/):"));
+          if (report.sandboxViolations.length === 0) {
+            console.log(pc.green("  ✔ 100% das tools utilizam validação estrita de sandbox!"));
+          } else {
+            for (const v of report.sandboxViolations) {
+              console.log(pc.red(`  ✖ ${v.file}: ${v.issue}`));
+            }
+          }
+
+          console.log(pc.bold("\n🧪 Cobertura de Módulos (src/ vs tests/):"));
+          if (report.testGaps.length === 0) {
+            console.log(pc.green("  ✔ Todos os módulos de ferramentas e core possuem testes dedicados!"));
+          } else {
+            for (const g of report.testGaps) {
+              console.log(pc.yellow(`  ⚠️ Sem teste: ${g.sourceModule} (esperado: ${g.missingTestFile})`));
+            }
+          }
+
+          const proposal = auditor.generateIssueProposal(report);
+          if (proposal) {
+            console.log(pc.bold(pc.magenta("\n📋 Minuta de Issue Técnica Proposta:")));
+            console.log(pc.cyan(`Título: ${proposal.title}`));
+            console.log(pc.gray("Corpo:\n" + proposal.body));
+            console.log(pc.cyan("========================================================\n"));
+
+            const confirm = await rl.question(
+              pc.bold(pc.yellow("Deseja criar esta issue no GitHub via 'gh issue create'? (s/N): "))
+            );
+
+            if (confirm.trim().toLowerCase() === "s" || confirm.trim().toLowerCase() === "sim") {
+              console.log(pc.cyan("\n[Enviando issue para o GitHub...]"));
+              const ghResult = await auditor.createGitHubIssue(proposal);
+              if (ghResult.success) {
+                console.log(pc.bold(pc.green(`\n✔ Issue criada com sucesso: ${ghResult.url}\n`)));
+              } else {
+                console.log(pc.red(`\n✖ Falha ao criar issue: ${ghResult.error}\n`));
+              }
+            } else {
+              console.log(pc.gray("\nCriação da issue cancelada pelo usuário.\n"));
+            }
+          } else {
+            console.log(pc.bold(pc.green("\n🎉 Projeto em excelente conformidade! Nenhuma issue necessária.\n")));
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.log(pc.red(`\n✖ Erro ao executar auditoria: ${msg}\n`));
+        }
+        continue;
+      }
+
+      if (trimmed === "/reindex" || trimmed.startsWith("/reindex ")) {
+        console.log(pc.cyan("\n[⚙️ Disparando indexação incremental de conhecimento...]"));
+        try {
+          const isOnline = await embeddingService.isAvailable();
+          if (!isOnline) {
+            console.log(
+              pc.red(
+                `\n✖ Serviço de embeddings offline em ${config.embedding.baseUrl}.\nInicie com: npm run embedding:serve ou 'scripts/start-embedding-server.ps1'\n`
+              )
+            );
+            continue;
+          }
+
+          const codeSummary = await indexer.indexCodebase(config.filesystem.allowedPaths);
+          const vaultSummary = await indexer.indexVault(config.finance.vaultPath);
+
+          console.log(pc.bold(pc.green(`\n✔ Indexação incremental concluída!`)));
+          console.log(
+            pc.cyan(
+              `  • Codebase: ${codeSummary.filesIndexed} atualizados, ${codeSummary.filesSkipped} inalterados (${codeSummary.durationMs}ms)`
+            )
+          );
+          console.log(
+            pc.cyan(
+              `  • Vault:    ${vaultSummary.filesIndexed} atualizados, ${vaultSummary.filesSkipped} inalterados (${vaultSummary.durationMs}ms)\n`
+            )
+          );
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.log(pc.red(`\n✖ Erro durante reindexação: ${msg}\n`));
+        }
+        continue;
+      }
+
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
         console.log(pc.bold("  /financas     ") + "- Exibe o extrato financeiro e saldo do mês no Obsidian");
+        console.log(pc.bold("  /auditar      ") + "- Executa auto-auditoria de latência, sandbox e cobertura");
+        console.log(pc.bold("  /reindex      ") + "- Dispara reindexação incremental de código e cofre");
         console.log(pc.bold("  /memoria      ") + "- Exibe o perfil e notas salvas sobre você");
         console.log(pc.bold("  /regras       ") + "- Exibe o nome e diretrizes ativas do agente");
         console.log(pc.bold("  /aprendizados ") + "- Exibe as lições aprendidas e feedbacks operacionais gerais");
@@ -374,6 +480,26 @@ async function main() {
           } else if (toolName === "get_financial_summary") {
             process.stdout.write(
               pc.dim(pc.cyan(`\n[📊 Finanças: consultando extrato no Obsidian]\n${agentName}: `))
+            );
+          } else if (toolName === "search_codebase") {
+            const q = (args as { query?: string })?.query || "";
+            const p = (args as { project?: string })?.project || "todos os repos";
+            process.stdout.write(
+              pc.dim(pc.blue(`\n[🔍 Code Search: buscando "${q}" em ${p}]\n${agentName}: `))
+            );
+          } else if (toolName === "search_vault") {
+            const q = (args as { query?: string })?.query || "";
+            process.stdout.write(
+              pc.dim(pc.magenta(`\n[📓 Vault Search: buscando "${q}" no Obsidian]\n${agentName}: `))
+            );
+          } else if (toolName === "reindex_knowledge") {
+            const target = (args as { target?: string })?.target || "all";
+            process.stdout.write(
+              pc.dim(pc.yellow(`\n[⚙️ Indexer: reindexando conhecimento (${target})]\n${agentName}: `))
+            );
+          } else if (toolName === "run_self_audit") {
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[🛡️ Auditoria: executando auto-auditoria do sistema]\n${agentName}: `))
             );
           }
         },
