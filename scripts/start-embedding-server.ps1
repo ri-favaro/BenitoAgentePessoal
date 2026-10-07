@@ -3,7 +3,9 @@
 
 param (
     [int]$Port = 8085,
-    [int]$ContextSize = 8192,
+    [int]$ContextSize = 4096,
+    [int]$BatchSize = 2048,
+    [int]$ParallelSlots = 1,
     [int]$GpuLayers = 99,
     [string]$ModelFile = "embeddinggemma-2-Q8_0.gguf"
 )
@@ -122,4 +124,4 @@ Write-Host "  GPU Layers:      $GpuLayers" -ForegroundColor Gray
 Write-Host "  Modo:            --embedding" -ForegroundColor Gray
 Write-Host "Pressione Ctrl+C para encerrar o servico.`n" -ForegroundColor Yellow
 
-& $LlamaServerExe --port $Port --embedding --model "$ModelPath" -c $ContextSize -b $ContextSize -ub $ContextSize -ngl $GpuLayers --host 127.0.0.1
+& $LlamaServerExe --port $Port --embedding --model "$ModelPath" -np $ParallelSlots -c $ContextSize -b $BatchSize -ub $BatchSize -ngl $GpuLayers --host 127.0.0.1
