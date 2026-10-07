@@ -106,7 +106,7 @@ export const config: AppConfig = {
     baseUrl: process.env.EMBEDDING_BASE_URL || "http://localhost:8085/v1",
     model: process.env.EMBEDDING_MODEL || "unsloth/embeddinggemma-2-GGUF",
     dimensions: Number(process.env.EMBEDDING_DIMENSIONS || 768),
-    timeoutMs: Number(process.env.EMBEDDING_TIMEOUT_MS || 30000),
+    timeoutMs: Number(process.env.EMBEDDING_TIMEOUT_MS || 120000),
   },
   vectorStore: {
     dbPath: path.resolve(

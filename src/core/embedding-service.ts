@@ -99,7 +99,7 @@ export class EmbeddingService {
 
     const targetDimensions = options?.dimensions || this.defaultDimensions;
     const timeoutMs = options?.timeoutMs || this.defaultTimeoutMs;
-    const batchSize = 16;
+    const batchSize = 4;
     const results: number[][] = [];
 
     for (let i = 0; i < texts.length; i += batchSize) {

@@ -277,7 +277,7 @@ export class KnowledgeIndexer {
     const chunks: CodeChunkRecord[] = [];
     const now = Date.now();
 
-    if (totalLines <= 300) {
+    if (totalLines <= 300 && params.content.length <= 8000) {
       chunks.push({
         id: `${params.relativePath}:1-${totalLines}`,
         vector: [],
@@ -361,38 +361,51 @@ export class KnowledgeIndexer {
       sections.push({ heading: currentHeading, lines: currentLines });
     }
 
-    // Se o arquivo tiver poucas seções ou nenhuma divisão explícita
-    if (sections.length <= 1) {
-      chunks.push({
-        id: `${params.relativePath}:all`,
-        vector: [],
-        vaultPath: params.vaultPath,
-        relativePath: params.relativePath,
-        title,
-        heading: "Completo",
-        content: params.content,
-        contentHash: params.hash,
-        updatedAt: now,
-      });
-      return chunks;
-    }
-
     let chunkIdx = 0;
-    for (const section of sections) {
-      const sectionContent = section.lines.join("\n").trim();
-      if (!sectionContent) continue;
+    const maxLinesPerChunk = 200;
+    const overlap = 40;
 
-      chunks.push({
-        id: `${params.relativePath}:sec-${chunkIdx++}`,
-        vector: [],
-        vaultPath: params.vaultPath,
-        relativePath: params.relativePath,
-        title,
-        heading: section.heading,
-        content: sectionContent,
-        contentHash: params.hash,
-        updatedAt: now,
-      });
+    for (const section of sections) {
+      const sLines = section.lines;
+      const sHeading = section.heading;
+
+      if (sLines.length <= maxLinesPerChunk) {
+        const text = sLines.join("\n").trim();
+        if (!text) continue;
+        chunks.push({
+          id: `${params.relativePath}:sec-${chunkIdx++}`,
+          vector: [],
+          vaultPath: params.vaultPath,
+          relativePath: params.relativePath,
+          title,
+          heading: sHeading,
+          content: text,
+          contentHash: params.hash,
+          updatedAt: now,
+        });
+      } else {
+        // Seção longa dividida em sub-janelas
+        let sStart = 0;
+        while (sStart < sLines.length) {
+          const sEnd = Math.min(sStart + maxLinesPerChunk, sLines.length);
+          const subText = sLines.slice(sStart, sEnd).join("\n").trim();
+          if (subText) {
+            chunks.push({
+              id: `${params.relativePath}:sec-${chunkIdx++}`,
+              vector: [],
+              vaultPath: params.vaultPath,
+              relativePath: params.relativePath,
+              title,
+              heading: `${sHeading} (${sStart + 1}-${sEnd})`,
+              content: subText,
+              contentHash: params.hash,
+              updatedAt: now,
+            });
+          }
+          if (sEnd >= sLines.length) break;
+          sStart += maxLinesPerChunk - overlap;
+        }
+      }
     }
 
     return chunks;
