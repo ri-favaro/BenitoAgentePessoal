@@ -4,7 +4,7 @@
 param (
     [int]$Port = 8085,
     [int]$ContextSize = 4096,
-    [int]$BatchSize = 2048,
+    [int]$BatchSize = 4096,
     [int]$ParallelSlots = 1,
     [int]$GpuLayers = 99,
     [string]$ModelFile = "embeddinggemma-2-Q8_0.gguf"

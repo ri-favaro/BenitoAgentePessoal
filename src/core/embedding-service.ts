@@ -99,22 +99,55 @@ export class EmbeddingService {
 
     const targetDimensions = options?.dimensions || this.defaultDimensions;
     const timeoutMs = options?.timeoutMs || this.defaultTimeoutMs;
-    const batchSize = 4;
+    const batchSize = 2;
     const results: number[][] = [];
 
     for (let i = 0; i < texts.length; i += batchSize) {
       const slice = texts.slice(i, i + batchSize);
-      const batchVectors = await this.fetchEmbeddingsInternal(slice, timeoutMs);
+      try {
+        const batchVectors = await this.fetchEmbeddingsInternal(slice, timeoutMs);
 
-      for (const rawVec of batchVectors) {
-        let processed = rawVec;
-        // Truncamento Matryoshka (MRL) e re-normalização caso dimensões < tamanho do vetor
-        if (targetDimensions > 0 && targetDimensions < processed.length) {
-          processed = normalizeL2(processed.slice(0, targetDimensions));
-        } else {
-          processed = normalizeL2(processed);
+        for (const rawVec of batchVectors) {
+          let processed = rawVec;
+          // Truncamento Matryoshka (MRL) e re-normalização caso dimensões < tamanho do vetor
+          if (targetDimensions > 0 && targetDimensions < processed.length) {
+            processed = normalizeL2(processed.slice(0, targetDimensions));
+          } else {
+            processed = normalizeL2(processed);
+          }
+          results.push(processed);
         }
-        results.push(processed);
+      } catch (batchError: any) {
+        // Se o erro foi de conexão indisponível/timeout geral, propaga imediatamente o erro de infraestrutura
+        if (
+          batchError.code === "ECONNREFUSED" ||
+          batchError.message?.includes("inacessível") ||
+          batchError.message?.includes("fetch failed")
+        ) {
+          throw batchError;
+        }
+
+        // Caso contrário (ex: status 400 por estouro de tokens ou erro de payload), processa item a item
+        for (const text of slice) {
+          const safeText = text.length > 3000 ? text.slice(0, 3000) : text;
+          try {
+            const [singleVec] = await this.fetchEmbeddingsInternal([safeText], timeoutMs);
+            let processed = singleVec || [];
+            if (processed.length > 0) {
+              if (targetDimensions > 0 && targetDimensions < processed.length) {
+                processed = normalizeL2(processed.slice(0, targetDimensions));
+              } else {
+                processed = normalizeL2(processed);
+              }
+            }
+            results.push(processed);
+          } catch (singleErr: any) {
+            console.warn(
+              `[EmbeddingService] Falha ao processar item individual: ${singleErr.message}`
+            );
+            results.push([]);
+          }
+        }
       }
     }
 

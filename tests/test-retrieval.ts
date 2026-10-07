@@ -168,7 +168,7 @@ async function runRetrievalTests() {
     assert.strictEqual(shortChunks[0].startLine, 1);
     assert.strictEqual(shortChunks[0].endLine, 3);
 
-    // Arquivo de código longo (> 300 linhas): múltiplos chunks com overlap
+    // Arquivo de código longo (> 60 linhas): múltiplos chunks com overlap
     const longCodeLines = Array.from({ length: 450 }, (_, i) => `line ${i + 1}`).join("\n");
     const longChunks = indexer.chunkCodeFile({
       filePath: "src/long.ts",
@@ -179,7 +179,7 @@ async function runRetrievalTests() {
     });
     assert.ok(longChunks.length >= 2, "Arquivo de 450 linhas deve gerar múltiplos chunks");
     assert.strictEqual(longChunks[0].startLine, 1);
-    assert.strictEqual(longChunks[0].endLine, 200);
+    assert.strictEqual(longChunks[0].endLine, 60);
 
     // Chunking de Markdown
     const markdownContent = `# Titulo da Nota\n\nIntrodução.\n\n## Secao 1\n\nConteudo da secao 1.\n\n## Secao 2\n\nConteudo da secao 2.`;

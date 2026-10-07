@@ -8,6 +8,7 @@ import {
   type VaultChunkRecord,
 } from "./vector-store.js";
 import { isPathInside } from "../tools/path-guard.js";
+import { config } from "../config.js";
 
 export interface IndexSummary {
   target: "codebase" | "vault" | "all";
@@ -34,6 +35,11 @@ const DEFAULT_IGNORED_DIRS = new Set([
   "obj",
   "logs",
   "scratch",
+  ".turbo",
+  "out",
+  ".cache",
+  "tmp",
+  "temp",
 ]);
 
 const SUPPORTED_CODE_EXTENSIONS = new Set([
@@ -76,16 +82,27 @@ export class KnowledgeIndexer {
     const storedHashes = await this.vectorStore.getStoredHashes("codebase");
     const scannedRelativePaths = new Set<string>();
     const pendingChunks: CodeChunkRecord[] = [];
+    const resolvedVault = path.resolve(config.finance.vaultPath).toLowerCase();
 
     for (const dir of allowedDirs) {
       const resolvedDir = path.resolve(dir);
+      // Evita indexar o cofre do Obsidian como codebase se ele estiver em ALLOWED_DIRECTORIES
+      if (resolvedDir.toLowerCase() === resolvedVault) {
+        continue;
+      }
+
       const projectName = path.basename(resolvedDir);
 
       try {
         const filePaths = await this.scanDirectory(resolvedDir, (f) => {
           const ext = path.extname(f).toLowerCase();
-          const base = path.basename(f);
-          if (base === "package-lock.json" || base === "yarn.lock" || base === "pnpm-lock.yaml") {
+          const base = path.basename(f).toLowerCase();
+          if (
+            base === "package-lock.json" ||
+            base === "yarn.lock" ||
+            base === "pnpm-lock.yaml" ||
+            base.endsWith(".tsbuildinfo")
+          ) {
             return false;
           }
           return SUPPORTED_CODE_EXTENSIONS.has(ext);
@@ -103,8 +120,11 @@ export class KnowledgeIndexer {
             continue;
           }
 
-          // Ignora arquivos vazios
-          if (!content.trim()) continue;
+          // Ignora arquivos vazios ou excessivamente grandes (> 150KB) que costumam ser bundles/dumps
+          if (!content.trim() || content.length > 150000) {
+            filesSkipped++;
+            continue;
+          }
 
           const hash = this.computeHash(content);
           if (storedHashes.get(relativePath) === hash) {
@@ -140,8 +160,11 @@ export class KnowledgeIndexer {
         pendingChunks[i].vector = embeddings[i] || [];
       }
 
-      await this.vectorStore.upsertCodebaseChunks(pendingChunks);
-      chunksCreated = pendingChunks.length;
+      const validChunks = pendingChunks.filter((c) => c.vector.length > 0);
+      if (validChunks.length > 0) {
+        await this.vectorStore.upsertCodebaseChunks(validChunks);
+      }
+      chunksCreated = validChunks.length;
     }
 
     // Identifica e remove arquivos que foram excluídos do disco
@@ -233,8 +256,11 @@ export class KnowledgeIndexer {
         pendingChunks[i].vector = embeddings[i] || [];
       }
 
-      await this.vectorStore.upsertVaultChunks(pendingChunks);
-      chunksCreated = pendingChunks.length;
+      const validChunks = pendingChunks.filter((c) => c.vector.length > 0);
+      if (validChunks.length > 0) {
+        await this.vectorStore.upsertVaultChunks(validChunks);
+      }
+      chunksCreated = validChunks.length;
     }
 
     const filesToDelete: string[] = [];
@@ -261,8 +287,9 @@ export class KnowledgeIndexer {
 
   /**
    * Chunking para arquivos de código.
-   * Arquivos <= 300 linhas viram 1 único chunk (aproveitando 8k ctx).
-   * Arquivos maiores são divididos em janelas de 200 linhas com sobreposição de 40 linhas.
+   * Arquivos <= 60 linhas e <= 2200 caracteres viram 1 único chunk.
+   * Arquivos maiores são divididos em janelas semânticas de 60 linhas com overlap de 15 linhas,
+   * respeitando limite estrito de 2400 caracteres por chunk para prevenir estouro de tokens físicos.
    */
   chunkCodeFile(params: {
     filePath: string;
@@ -277,7 +304,7 @@ export class KnowledgeIndexer {
     const chunks: CodeChunkRecord[] = [];
     const now = Date.now();
 
-    if (totalLines <= 300 && params.content.length <= 8000) {
+    if (totalLines <= 60 && params.content.length <= 2200) {
       chunks.push({
         id: `${params.relativePath}:1-${totalLines}`,
         vector: [],
@@ -294,14 +321,27 @@ export class KnowledgeIndexer {
       return chunks;
     }
 
-    const chunkSize = 200;
-    const overlap = 40;
+    const lineWindow = 60;
+    const overlap = 15;
+    const maxChars = 2400;
     let start = 0;
 
     while (start < totalLines) {
-      const end = Math.min(start + chunkSize, totalLines);
-      const chunkLines = lines.slice(start, end);
-      const chunkContent = chunkLines.join("\n");
+      let end = Math.min(start + lineWindow, totalLines);
+      let chunkLines = lines.slice(start, end);
+      let text = chunkLines.join("\n");
+
+      // Reduz linhas progressivamente se o bloco for muito denso em caracteres
+      while (text.length > maxChars && end > start + 10) {
+        end -= 5;
+        chunkLines = lines.slice(start, end);
+        text = chunkLines.join("\n");
+      }
+
+      // Trava de segurança para linhas gigantescas ou código minificado
+      if (text.length > 2800) {
+        text = text.slice(0, 2800);
+      }
 
       chunks.push({
         id: `${params.relativePath}:${start + 1}-${end}`,
@@ -312,13 +352,13 @@ export class KnowledgeIndexer {
         startLine: start + 1,
         endLine: end,
         language: ext,
-        content: chunkContent,
+        content: text,
         contentHash: params.hash,
         updatedAt: now,
       });
 
       if (end >= totalLines) break;
-      start += chunkSize - overlap;
+      start = Math.max(start + 1, end - overlap);
     }
 
     return chunks;
@@ -326,7 +366,7 @@ export class KnowledgeIndexer {
 
   /**
    * Chunking para notas Markdown (Obsidian).
-   * Divide por seções de cabeçalhos (#, ##, ###).
+   * Divide por seções de cabeçalhos (#, ##, ###) com limite estrito de caracteres.
    */
   chunkMarkdownFile(params: {
     vaultPath: string;
@@ -362,16 +402,17 @@ export class KnowledgeIndexer {
     }
 
     let chunkIdx = 0;
-    const maxLinesPerChunk = 200;
-    const overlap = 40;
+    const maxLinesPerChunk = 60;
+    const overlap = 15;
+    const maxChars = 2400;
 
     for (const section of sections) {
       const sLines = section.lines;
       const sHeading = section.heading;
+      const fullSectionText = sLines.join("\n").trim();
+      if (!fullSectionText) continue;
 
-      if (sLines.length <= maxLinesPerChunk) {
-        const text = sLines.join("\n").trim();
-        if (!text) continue;
+      if (sLines.length <= maxLinesPerChunk && fullSectionText.length <= maxChars) {
         chunks.push({
           id: `${params.relativePath}:sec-${chunkIdx++}`,
           vector: [],
@@ -379,16 +420,28 @@ export class KnowledgeIndexer {
           relativePath: params.relativePath,
           title,
           heading: sHeading,
-          content: text,
+          content: fullSectionText,
           contentHash: params.hash,
           updatedAt: now,
         });
       } else {
-        // Seção longa dividida em sub-janelas
+        // Seção longa dividida em sub-janelas seguras
         let sStart = 0;
         while (sStart < sLines.length) {
-          const sEnd = Math.min(sStart + maxLinesPerChunk, sLines.length);
-          const subText = sLines.slice(sStart, sEnd).join("\n").trim();
+          let sEnd = Math.min(sStart + maxLinesPerChunk, sLines.length);
+          let subLines = sLines.slice(sStart, sEnd);
+          let subText = subLines.join("\n").trim();
+
+          while (subText.length > maxChars && sEnd > sStart + 5) {
+            sEnd -= 5;
+            subLines = sLines.slice(sStart, sEnd);
+            subText = subLines.join("\n").trim();
+          }
+
+          if (subText.length > 2800) {
+            subText = subText.slice(0, 2800);
+          }
+
           if (subText) {
             chunks.push({
               id: `${params.relativePath}:sec-${chunkIdx++}`,
@@ -403,7 +456,7 @@ export class KnowledgeIndexer {
             });
           }
           if (sEnd >= sLines.length) break;
-          sStart += maxLinesPerChunk - overlap;
+          sStart = Math.max(sStart + 1, sEnd - overlap);
         }
       }
     }
@@ -432,7 +485,7 @@ export class KnowledgeIndexer {
       for (const entry of entries) {
         const fullPath = path.join(currentDir, entry.name);
         if (entry.isDirectory()) {
-          if (!DEFAULT_IGNORED_DIRS.has(entry.name)) {
+          if (!DEFAULT_IGNORED_DIRS.has(entry.name.toLowerCase())) {
             await walk(fullPath);
           }
         } else if (entry.isFile()) {
