@@ -1,4 +1,4 @@
-# 🤖 Guia de Desenvolvimento & Instruções para Agentes (AGENTES.md)
+# 🤖 Guia de Desenvolvimento & Instruções para Agentes (AGENTS.md)
 
 Este documento orienta desenvolvedores e agentes de IA que forem trabalhar na manutenção, evolução e expansão do repositório do **Benito**.
 
@@ -12,7 +12,9 @@ Este documento orienta desenvolvedores e agentes de IA que forem trabalhar na ma
   - O código TypeScript provê **apenas infraestrutura neutra e guardrails**: tipagem estrita (Zod), controle de rede, sandbox de filesystem (`path-guard`), prevenção de loops e integridade do processo.
   - **NUNCA crie remendos semânticos hardcoded:** é proibido adicionar regexes conversacionais, dicionários de sinônimos ou substituições ad-hoc no TypeScript para consertar erros pontuais do modelo.
   - **Zero "Memória Fóssil":** A memória persistente (`memory/*.md`) deve guardar fatos duradouros e restrições (perfil, hardware físico, preferências). Nunca grave listas estáticas de dados perecíveis (ex: "melhores modelos do ano"). O agente deve pesquisar fatos dinâmicos na web.
-- **Hardware de Referência:** PC com **RTX 4070 Ti (12GB VRAM)**. Modelo padrão: **Qwen 3.5 9B (24k)** local via Ollama (`qwen3.5:9b-24k`), com suporte a fallback para Google Gemini.
+- **Hardware de Referência:** PC com **RTX 4070 Ti (12GB VRAM)**.
+  - **Modelo LLM Padrão:** **Qwen 3.5 9B (24k)** local via Ollama (`qwen3.5:9b-24k`), com suporte a fallback para Google Gemini.
+  - **Modelo de Embeddings Local:** **EmbeddingGemma-2 GGUF** (768 dimensões) local via `llama-server` na porta 8085 (`unsloth/embeddinggemma-2-GGUF`), otimizado para baixo consumo de memória (~270MB RAM).
 
 ---
 
@@ -23,8 +25,10 @@ Este documento orienta desenvolvedores e agentes de IA que forem trabalhar na ma
 | **Linguagem & Runtime** | TypeScript 5.8+ (ESM nativo) / Node.js 22+ & `tsx` | Tipagem estrita e execução ágil |
 | **Orquestrador de IA** | Vercel AI SDK (`ai`, `@ai-sdk/openai`, `@ai-sdk/google`) | Streaming, tool calling e structured output |
 | **LLMs Suportadas** | Ollama local (Qwen 3.5 9B/4B), llama-server ou Gemini Flash | Inferência local e fallback em nuvem |
+| **Base Vetorial & RAG** | LanceDB (`@lancedb/lancedb`) + EmbeddingGemma-2 (768d) | Busca semântica local no codebase e cofre Obsidian |
 | **Busca Web & Leitura** | Tavily AI Search (primário) / SearXNG (fallback) + Jina Reader | Busca factual e renderização profunda |
-| **Interface & Acesso** | CLI interativa (terminal) e Telegram Bot (`grammy`) | Acesso local e remoto |
+| **Interface & Acesso** | CLI interativa (paste burst) e Telegram Bot (`grammy`) | Acesso local no terminal e remoto via Telegram |
+| **Gestão de Issues & Auto-Melhoria** | GitHub REST API + `SelfAuditor` | Registro de issues, auditoria de gargalos e auto-evolução |
 | **Segurança & Schemas** | Zod (`zod`) + `path-guard.ts` (sandbox) | Validação estrita de entradas e I/O em disco |
 
 ---
@@ -33,17 +37,38 @@ Este documento orienta desenvolvedores e agentes de IA que forem trabalhar na ma
 
 ```
 src/
-├── core/             # Orquestração (agent.ts), parser FSM (reasoning-parser.ts), auditoria (reasoning-logger.ts) e llm.ts
-├── interfaces/       # Terminal interativo com paste multi-linha (cli.ts) e bot do Telegram (telegram.ts, telegram-utils.ts)
-├── memory/           # MemoryManager (leitura de Markdown, tópicos modulares e /consolidar)
+├── cli.ts            # Ponto de entrada CLI interativo (suporte a paste multi-linha)
+├── config.ts         # Configuração centralizada e tipada do ambiente (.env)
+├── core/             # Núcleo cognitivo e de infraestrutura
+│   ├── agent.ts            # Orquestração do agente (PersonalAgent)
+│   ├── llm.ts              # Provedores de modelo (Ollama, OpenAI-compatible, Gemini)
+│   ├── reasoning-parser.ts # Streaming parser FSM (<thinking> / <think>)
+│   ├── reasoning-logger.ts # Auditoria assíncrona em logs/reasoning.log (JSONL)
+│   ├── embedding-service.ts# Cliente HTTP para llama-server (EmbeddingGemma-2 768d)
+│   ├── vector-store.ts     # Persistência e busca vetorial com LanceDB (.lancedb/)
+│   ├── indexer.ts          # Indexador incremental (chunking por AST/tópicos + hash SHA-256)
+│   ├── github-service.ts   # Integração com GitHub REST API (issues/labels)
+│   └── self-auditor.ts     # Auditoria de raciocínio, sandbox e cobertura de testes
+├── interfaces/       # Adaptadores de comunicação e interface
+│   ├── telegram.ts         # Bot do Telegram (comandos, streaming e gestão de sessão)
+│   └── telegram-utils.ts   # SessionTracker (TTL por inatividade), autorização e split
+├── memory/           # Gestão de memória persistente
+│   └── memory-manager.ts   # Leitura de Markdown, tópicos modulares e /consolidar
 ├── tools/            # Ferramentas expostas ao modelo (index.ts)
 │   ├── web-tools.ts        # Busca web (Tavily/SearXNG), Jina Reader e cache anti-loop
 │   ├── filesystem-tools.ts # Leitura/escrita de arquivos com sandbox
-│   ├── finance-tools.ts    # Gestão financeira com carteiras (CC/VA), saldo mestre O(1) e conciliação no Obsidian
+│   ├── finance-tools.ts    # Gestão financeira com carteiras (CC/VA) e saldo mestre O(1)
+│   ├── retrieval-tools.ts  # Busca semântica (search_codebase, search_vault, reindex_knowledge)
+│   ├── github-tools.ts     # Gestão de issues no GitHub (create_github_issue, list_github_issues)
+│   ├── audit-tools.ts      # Auto-auditoria holística (run_self_audit)
 │   ├── path-guard.ts       # Validação e restrição de diretórios autorizados
 │   └── memory-tools.ts     # Ferramentas para o modelo persistir fatos e aprendizados
+scripts/              # Utilitários de inicialização e manutenção
+├── start-embedding-server.ps1 # Launcher do llama-server com consumo otimizado (270MB RAM)
+└── index-knowledge.ts         # Script CLI para disparar indexação em lote (npm run index)
+.lancedb/             # Armazenamento vetorial local embutido (tabelas: codebase, vault)
 logs/                 # Auditoria contínua de raciocínio e intenções (reasoning.log JSONL)
-tests/                # Suíte de testes automatizados (reasoning, filesystem, finance, search, memory, telegram)
+tests/                # Suíte de testes automatizados (9 suítes com 100% de cobertura funcional)
 memory/               # Memória persistente do Benito (profile.md, rules.md, learnings.md, topics/)
 ```
 
@@ -89,11 +114,75 @@ Ao implementar, estender ou manter recursos em `src/tools/finance-tools.ts`:
 
 ---
 
-## 📜 Convenções & Validação Obrigatória
+## 🔍 Módulo de Busca Semântica & RAG (LanceDB + EmbeddingGemma-2)
 
-- **Idioma de Commits:** Sempre em **Português do Brasil (pt-br)** com Conventional Commits (`feat:`, `fix:`, `chore:`, etc.).
+Ao manter ou evoluir recursos de recuperação e embeddings em `src/core/` e `src/tools/retrieval-tools.ts`:
+
+1. **Estrutura Dual de Conhecimento (`codebase` e `vault`):**
+   - Tabela `codebase`: Fragmentos de código delimitados por escopo (funções, classes, rotas) de todos os repositórios autorizados em `ALLOWED_DIRECTORIES`.
+   - Tabela `vault`: Seções estruturadas e títulos de notas Markdown no Cofre do Obsidian (`G:\CofreObsidian\AgentePessoal`).
+2. **Indexação Incremental Baseada em SHA-256 (`KnowledgeIndexer`):**
+   - O indexador calcula o hash SHA-256 de cada arquivo antes de reprocessar. Chunks inalterados são preservados, poupando processamento e mantendo a indexação ultrarrápida.
+3. **Servidor de Embeddings Local Otimizado:**
+   - O executável `llama-server` roda via `scripts/start-embedding-server.ps1` com o modelo `unsloth/embeddinggemma-2-GGUF` (768 dimensões) na porta 8085.
+   - Utiliza flags `--ubatch 512`, `-c 2048`, `--embedding` para reduzir o consumo de memória RAM/VRAM de 9.3GB para apenas ~270MB.
+4. **Filtro Estrito de Sandbox (`path-guard`):**
+   - Todos os resultados de buscas vetoriais (`search_codebase` e `search_vault`) passam por `validateAllowedPath` antes de serem expostos ao modelo, garantindo isolamento total contra vazamento de arquivos sensíveis.
+
+---
+
+## 🚀 Auto-Melhoria, Auditoria & Protocolo Human-in-the-Loop (GitHub)
+
+Ao evoluir os módulos `src/core/self-auditor.ts`, `src/core/github-service.ts` e `src/tools/github-tools.ts`:
+
+1. **Auto-Auditoria Holística (`run_self_audit`):**
+   - O `SelfAuditor` monitora o arquivo `logs/reasoning.log` para calcular tempos médios de resposta e detectar gargalos de latência.
+   - Realiza varreduras estáticas de cobertura comparando arquivos do `src/` com as suítes de `tests/`, apontando possíveis lacunas de teste (`testGaps`).
+   - Verifica violações de sandbox e diretórios não autorizados.
+2. **Protocolo Estrito Human-in-the-Loop para Criação de Issues:**
+   - **Regra Inviolável:** O Benito NUNCA cria issues silenciosamente ou autonomamente no GitHub.
+   - Ao identificar uma limitação técnica ou inconsistência, o agente deve:
+     1. Consultar o backlog aberto via `list_github_issues` para evitar duplicatas.
+     2. Apresentar no chat uma minuta objetiva contendo título formatado em Conventional Commits (ex: `feat(tools): ...`) e proposta de escopo.
+     3. Pedir autorização explícita ao usuário (*"Deseja que eu abra uma issue no repositório com essa proposta?"*).
+     4. Acionar `create_github_issue` **somente** após a aprovação expressa do Luiz Ricardo.
+
+---
+
+## 💬 Módulo do Telegram & Session Tracker (TTL de Inatividade)
+
+Ao dar manutenção na interface do Telegram (`src/interfaces/telegram.ts` e `telegram-utils.ts`):
+
+1. **Rastreamento de Inatividade (`SessionTracker`):**
+   - A classe `SessionTracker` mantém o timestamp da última interação para cada chat autorizado.
+   - O tempo limite é configurado via variável `SESSION_INACTIVITY_TIMEOUT_MINUTES` (padrão: 120 minutos / 2 horas).
+2. **Expiração e Reset Automático de Sessão:**
+   - Quando o usuário envia uma nova mensagem após o período de inatividade, o histórico recente (`PersonalAgent.messages`) é automaticamente resetado.
+   - Uma mensagem informativa discreta é exibida no chat informando o início de uma nova sessão limpa, evitando contaminação de contexto entre dias ou tarefas desconexas.
+3. **Comandos Integrados:**
+   - O comando `/status` exibe as métricas de tempo decorrido e TTL configurado.
+   - O comando `/limpar` reseta tanto o histórico do modelo quanto o temporizador do `SessionTracker`.
+
+---
+
+## 📜 Convenções, Scripts & Validação Obrigatória
+
+### Comandos Úteis (`package.json`)
+
+| Comando | Finalidade |
+| :--- | :--- |
+| `npm run dev` / `npm start` | Inicia o assistente na interface CLI interativa (terminal) |
+| `npm run telegram` | Inicia o bot do Benito no Telegram |
+| `npm run embedding:serve` | Inicia o servidor local do llama-server para embeddings (EmbeddingGemma-2) |
+| `npm run index` | Dispara a indexação incremental do codebase e cofre Obsidian |
+| `npm run build` | Compila o projeto com o TypeScript (`tsc`) |
+| `npm test` | Executa a suíte completa de testes automatizados (todas as 9 suítes) |
+| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`) |
+
+### Regras Gerais
+- **Idioma de Commits:** Sempre em **Português do Brasil (pt-br)** com Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.).
 - **Segurança:** **NUNCA** commite arquivos `.env`, chaves de API, credenciais ou dados pessoais do usuário.
-- **Validação Local Obrigatória:** Antes de concluir qualquer tarefa, certifique-se de que os testes e a compilação passem:
+- **Validação Local Obrigatória:** Antes de concluir qualquer tarefa, certifique-se de que a compilação passe e execute os testes pertinentes:
   ```powershell
   npm run build
   npm test
