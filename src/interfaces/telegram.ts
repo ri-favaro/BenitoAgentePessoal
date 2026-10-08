@@ -7,6 +7,7 @@ import {
   isUserAuthorized,
   splitTelegramMessage,
   formatToolFeedback,
+  SessionTracker,
 } from "./telegram-utils.js";
 import { SelfAuditor } from "../core/self-auditor.js";
 import { KnowledgeIndexer } from "../core/indexer.js";
@@ -30,6 +31,7 @@ async function main() {
   const embeddingService = new EmbeddingService();
   const vectorStore = new VectorStore();
   const indexer = new KnowledgeIndexer(embeddingService, vectorStore);
+  const sessionTracker = new SessionTracker(config.telegram.sessionTimeoutMinutes);
   const bot = new Bot(config.telegram.botToken);
 
   let agentName = await agent.memoryManager.getAgentName();
@@ -148,12 +150,19 @@ async function main() {
     const searchDesc =
       config.searchProvider === "tavily" ? "Tavily AI Search" : `SearXNG (${config.searxng.baseUrl})`;
 
+    const timeoutMin = sessionTracker.getTimeoutMinutes();
+    const ttlDesc = timeoutMin > 0 ? `${timeoutMin} min` : "Desativado";
+    const inactiveMin = sessionTracker.getInactiveMinutes(ctx.chat.id);
+    const inactiveDesc =
+      inactiveMin !== null ? ` (última interação há ${inactiveMin} min)` : " (nova sessão)";
+
     const statusMsg =
       `📊 *Status do Agente: ${agentName}*\n\n` +
       `• *Status:* 🟢 Online (Long Polling)\n` +
       `• *Provedor LLM:* ${modelName}\n` +
       `• *Busca Web:* ${searchDesc}\n` +
       `• *Mensagens na Sessão Atual:* ${history.length}\n` +
+      `• *TTL de Inatividade:* ${ttlDesc}${inactiveDesc}\n` +
       `• *Tópicos Modulares de Memória:* ${topics.length}\n` +
       `• *Diretório de Memória:* \`${config.memoryDir}\``;
 
@@ -210,6 +219,7 @@ async function main() {
   });
 
   bot.command("consolidar", async (ctx) => {
+    sessionTracker.updateActivity(ctx.chat.id);
     await ctx.reply("🧠 Benito está analisando o histórico recente e organizando a memória em tópicos. Aguarde um instante...");
     const history = agent.getHistory();
     try {
@@ -390,6 +400,7 @@ async function main() {
 
   bot.command("limpar", async (ctx) => {
     agent.clearHistory();
+    sessionTracker.resetSession(ctx.chat.id);
     await ctx.reply("🧹 Histórico da conversa atual limpo com sucesso! Uma nova sessão foi iniciada.");
   });
 
@@ -443,6 +454,27 @@ async function main() {
 
     // Enfileira a mensagem para processamento sequencial garantido
     enqueueChatTask(chatId, async () => {
+      // Verificação de expiração automática por inatividade (TTL)
+      if (sessionTracker.isExpired(chatId)) {
+        const inactiveMin = sessionTracker.getInactiveMinutes(chatId);
+        const hadHistory = agent.getHistory().length > 0;
+        console.log(
+          pc.yellow(
+            `[Telegram] 🕒 Sessão do chat ${chatId} expirada após ${inactiveMin}min de inatividade (limite: ${sessionTracker.getTimeoutMinutes()}min). Resetando histórico...`
+          )
+        );
+        agent.clearHistory();
+        if (hadHistory) {
+          await ctx
+            .reply(
+              "🕒 *Sessão anterior encerrada por inatividade.* O histórico recente foi resetado para iniciar uma conversa com contexto limpo.",
+              { parse_mode: "Markdown" }
+            )
+            .catch(() => {});
+        }
+      }
+      sessionTracker.updateActivity(chatId);
+
       let isDone = false;
 
       // Mantém o indicador nativo "typing" ativo enquanto processa
@@ -690,6 +722,11 @@ async function main() {
         ? pc.green(config.telegram.allowedUserIds.join(", "))
         : pc.red("Nenhum (configure TELEGRAM_ALLOWED_USER_ID no .env)"))
   );
+  const ttlLog =
+    config.telegram.sessionTimeoutMinutes > 0
+      ? `${config.telegram.sessionTimeoutMinutes} min`
+      : "Desativado";
+  console.log(pc.gray(`• TTL de Inatividade:  `) + pc.blue(ttlLog));
   console.log(pc.gray("--------------------------------------------------"));
   console.log(pc.green("✔ Bot do Benito conectado ao Telegram com sucesso!"));
   console.log(pc.dim("Aguardando mensagens via Long Polling... (Pressione Ctrl+C para encerrar)\n"));

@@ -148,3 +148,81 @@ export function splitTelegramMessage(
 
   return parts.filter((p) => p.length > 0);
 }
+
+/**
+ * Estado de uma sessão rastreada.
+ */
+export interface SessionState {
+  lastInteractionAt: number;
+}
+
+/**
+ * Gerenciador de tempo de inatividade (TTL) por sessão/chat do Telegram.
+ * Previne confusão de contexto e inchaço de memória quando o usuário fica
+ * muito tempo sem interagir com o bot.
+ */
+export class SessionTracker {
+  private sessions = new Map<number, SessionState>();
+  private timeoutMinutes: number;
+
+  constructor(timeoutMinutes: number = 120) {
+    this.timeoutMinutes = timeoutMinutes;
+  }
+
+  getTimeoutMinutes(): number {
+    return this.timeoutMinutes;
+  }
+
+  setTimeoutMinutes(minutes: number): void {
+    this.timeoutMinutes = minutes;
+  }
+
+  /**
+   * Verifica se a sessão de um chat expirou por inatividade.
+   * Retorna false se o timeout for <= 0 (desativado) ou se não houver histórico de interação.
+   */
+  isExpired(chatId: number, now: number = Date.now()): boolean {
+    if (this.timeoutMinutes <= 0) {
+      return false;
+    }
+    const session = this.sessions.get(chatId);
+    if (!session) {
+      return false;
+    }
+    const elapsedMinutes = (now - session.lastInteractionAt) / (1000 * 60);
+    return elapsedMinutes >= this.timeoutMinutes;
+  }
+
+  /**
+   * Retorna a quantidade de minutos desde a última interação, ou null caso a sessão seja nova.
+   */
+  getInactiveMinutes(chatId: number, now: number = Date.now()): number | null {
+    const session = this.sessions.get(chatId);
+    if (!session) {
+      return null;
+    }
+    return Math.floor((now - session.lastInteractionAt) / (1000 * 60));
+  }
+
+  /**
+   * Atualiza o timestamp de atividade da sessão para o momento atual.
+   */
+  updateActivity(chatId: number, now: number = Date.now()): void {
+    this.sessions.set(chatId, { lastInteractionAt: now });
+  }
+
+  /**
+   * Reseta/remove o rastreamento da sessão (ex: quando o usuário dá /limpar).
+   */
+  resetSession(chatId: number): void {
+    this.sessions.delete(chatId);
+  }
+
+  /**
+   * Limpa todas as sessões rastreadas.
+   */
+  clear(): void {
+    this.sessions.clear();
+  }
+}
+
