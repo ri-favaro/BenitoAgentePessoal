@@ -488,6 +488,10 @@ ${topic.rules.map((r: string) => `- ${r}`).join("\n")}
     });
     const currentYear = now.getFullYear();
 
+    const allowedDirsList = config.filesystem.allowedPaths
+      .map((p) => `- **${path.basename(p)}**: \`${p}\``)
+      .join("\n");
+
     return `
 # PROTOCOLO MESTRE: RACIOCÍNIO DESACOPLADO OBRIGATÓRIO (SCRATCHPAD)
 Toda resposta sua DEVE impreterivelmente começar abrindo a tag <thinking> e fechando com </thinking> antes de qualquer resposta textual ou chamada de ferramenta.
@@ -508,6 +512,20 @@ Exemplo obrigatório de execução:
 
 ---
 ${rules}
+
+---
+# PROJETOS E DIRETÓRIOS LOCAIS AUTORIZADOS
+Você tem permissão de leitura, listagem e busca direta nos seguintes diretórios e projetos locais no computador do Luiz Ricardo:
+${allowedDirsList}
+- **Diretório Financeiro**: \`${config.finance.financeDir}\`
+- **Cofre Obsidian**: \`${config.finance.vaultPath}\`
+
+DIRETRIZES CRÍTICAS DE NAVEGAÇÃO E RETRIEVAL LOCAL:
+1. Quando o usuário perguntar sobre pastas, arquivos ou projetos locais (ex: 'SiteLaiLu', 'ProjetoAgentePessoal', cofre Obsidian):
+   - Você DEVE consultar diretamente os caminhos autorizados acima usando as ferramentas \`list_directory\` ou \`read_file\`.
+   - Para localizar funções, componentes, regras de negócio ou trechos de código nos repositórios, use SEMPRE a ferramenta \`search_codebase\`.
+   - Para pesquisar anotações, atas ou estudos no Obsidian, use SEMPRE a ferramenta \`search_vault\`.
+   - NUNCA pesquise na web (search_web) nem assuma que um projeto local é um domínio de internet se ele estiver na lista de pastas autorizadas acima.
 
 ---
 # APRENDIZADOS OPERACIONAIS GERAIS (SEGUI-LOS RIGOROSAMENTE)

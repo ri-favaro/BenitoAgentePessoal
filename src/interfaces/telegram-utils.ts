@@ -76,6 +76,22 @@ export function formatToolFeedback(
     case "get_financial_summary": {
       return `📊 Consultando extrato financeiro no Obsidian...`;
     }
+    case "search_codebase": {
+      const q = typeof args.query === "string" ? args.query : "";
+      const p = typeof args.project === "string" ? ` [${args.project}]` : "";
+      return `🔍 Buscando no código${p}: "${q}"...`;
+    }
+    case "search_vault": {
+      const q = typeof args.query === "string" ? args.query : "";
+      return `📓 Buscando no Obsidian: "${q}"...`;
+    }
+    case "reindex_knowledge": {
+      const t = typeof args.target === "string" ? args.target : "all";
+      return `⚙️ Reindexando base de conhecimento (${t})...`;
+    }
+    case "run_self_audit": {
+      return `🛡️ Executando auto-auditoria do sistema...`;
+    }
     default:
       return `⚙️ Executando: ${toolName}...`;
   }

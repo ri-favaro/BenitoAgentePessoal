@@ -37,6 +37,15 @@ export interface AppConfig {
     vaultPath: string;
     financeDir: string;
   };
+  embedding: {
+    baseUrl: string;
+    model: string;
+    dimensions: number;
+    timeoutMs: number;
+  };
+  vectorStore: {
+    dbPath: string;
+  };
 }
 
 export const config: AppConfig = {
@@ -91,6 +100,17 @@ export const config: AppConfig = {
           process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal",
           "Financas"
         )
+    ),
+  },
+  embedding: {
+    baseUrl: process.env.EMBEDDING_BASE_URL || "http://localhost:8085/v1",
+    model: process.env.EMBEDDING_MODEL || "unsloth/embeddinggemma-2-GGUF",
+    dimensions: Number(process.env.EMBEDDING_DIMENSIONS || 768),
+    timeoutMs: Number(process.env.EMBEDDING_TIMEOUT_MS || 120000),
+  },
+  vectorStore: {
+    dbPath: path.resolve(
+      process.env.VECTOR_STORE_PATH || path.join(process.cwd(), ".lancedb")
     ),
   },
 };

@@ -8,13 +8,17 @@
     "dev": "tsx src/cli.ts",
     "start": "tsx src/cli.ts",
     "build": "tsc",
-    "test": "npm run test:reasoning && npm run test:filesystem && npm run test:finance && npm run test:search && npm run test:memory && npm run test:telegram",
+    "test": "npm run test:reasoning && npm run test:filesystem && npm run test:finance && npm run test:search && npm run test:memory && npm run test:telegram && npm run test:retrieval && npm run test:audit",
     "test:reasoning": "tsx tests/test-reasoning.ts",
     "test:filesystem": "tsx tests/test-filesystem.ts",
     "test:finance": "tsx tests/test-finance.ts",
     "test:search": "tsx tests/test-search.ts",
     "test:memory": "tsx tests/test-memory.ts",
     "test:telegram": "tsx tests/test-telegram-utils.ts",
+    "test:retrieval": "tsx tests/test-retrieval.ts",
+    "test:audit": "tsx tests/test-audit.ts",
+    "embedding:serve": "powershell -ExecutionPolicy Bypass -File scripts/start-embedding-server.ps1",
+    "index": "tsx scripts/index-knowledge.ts",
     "telegram": "tsx src/interfaces/telegram.ts"
   },
   "keywords": [
@@ -30,6 +34,7 @@
   "dependencies": {
     "@ai-sdk/google": "^1.1.20",
     "@ai-sdk/openai": "^1.2.0",
+    "@lancedb/lancedb": "^0.39.0",
     "ai": "^4.1.54",
     "dotenv": "^16.4.7",
     "grammy": "^1.46.0",

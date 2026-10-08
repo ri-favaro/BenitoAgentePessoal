@@ -8,6 +8,10 @@ import {
   splitTelegramMessage,
   formatToolFeedback,
 } from "./telegram-utils.js";
+import { SelfAuditor } from "../core/self-auditor.js";
+import { KnowledgeIndexer } from "../core/indexer.js";
+import { EmbeddingService } from "../core/embedding-service.js";
+import { VectorStore } from "../core/vector-store.js";
 
 async function main() {
   if (!config.telegram.botToken) {
@@ -22,6 +26,10 @@ async function main() {
 
   const agent = new PersonalAgent();
   const financeTools = createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths);
+  const auditor = new SelfAuditor();
+  const embeddingService = new EmbeddingService();
+  const vectorStore = new VectorStore();
+  const indexer = new KnowledgeIndexer(embeddingService, vectorStore);
   const bot = new Bot(config.telegram.botToken);
 
   let agentName = await agent.memoryManager.getAgentName();
@@ -71,6 +79,8 @@ async function main() {
       { command: "start", description: "Iniciar conversa com o Benito" },
       { command: "status", description: "Ver status do assistente e modelo ativo" },
       { command: "financas", description: "Ver resumo financeiro e saldo do mês" },
+      { command: "auditar", description: "Executar auto-auditoria do sistema" },
+      { command: "reindex", description: "Reindexar repositórios e notas do cofre" },
       { command: "memoria", description: "Ver perfil e memórias gravadas" },
       { command: "regras", description: "Ver persona e regras ativas" },
       { command: "aprendizados", description: "Ver aprendizados operacionais" },
@@ -298,6 +308,86 @@ async function main() {
     }
   });
 
+  bot.command("auditar", async (ctx) => {
+    await ctx.reply("🛡️ *Iniciando auto-auditoria do sistema...*", { parse_mode: "Markdown" });
+    try {
+      const report = await auditor.runAudit();
+      let msg = `🛡️ *RELATÓRIO DE AUTO-AUDITORIA*\n\n`;
+
+      msg += `⏱️ *Desempenho & Raciocínio:*\n`;
+      msg += `• Turnos analisados: ${report.performance.totalTurns}\n`;
+      msg += `• Duração média: ${report.performance.avgDurationMs}ms\n`;
+      msg += `• Turnos lentos (> 15s): ${report.performance.slowTurnsCount}\n\n`;
+
+      msg += `🛡️ *Conformidade de Sandbox (path-guard):*\n`;
+      if (report.sandboxViolations.length === 0) {
+        msg += `✔ 100% das ferramentas utilizam validação estrita de sandbox!\n\n`;
+      } else {
+        for (const v of report.sandboxViolations) {
+          msg += `✖ \`${v.file}\`: ${v.issue}\n`;
+        }
+        msg += `\n`;
+      }
+
+      msg += `🧪 *Cobertura de Módulos:*\n`;
+      if (report.testGaps.length === 0) {
+        msg += `✔ Todos os módulos de ferramentas e core possuem testes!\n\n`;
+      } else {
+        for (const g of report.testGaps) {
+          msg += `⚠️ Sem teste: \`${g.sourceModule}\`\n`;
+        }
+        msg += `\n`;
+      }
+
+      const proposal = auditor.generateIssueProposal(report);
+      if (proposal) {
+        msg += `📋 *Minuta de Issue Técnica Sugerida:*\n`;
+        msg += `*Título:* \`${proposal.title}\`\n\n`;
+        msg += `_Para revisar e autorizar a abertura no GitHub, utilize o comando /auditar no terminal CLI do Benito._`;
+      } else {
+        msg += `🎉 *Projeto em excelente conformidade! Nenhuma issue necessária.*`;
+      }
+
+      await safeReply(ctx, msg, { parse_mode: "Markdown" });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await ctx.reply(`❌ Erro ao executar auditoria: ${errorMsg}`);
+    }
+  });
+
+  bot.command("reindex", async (ctx) => {
+    await ctx.reply("⚙️ *Iniciando reindexação incremental de código e cofre...*", { parse_mode: "Markdown" });
+    try {
+      const isOnline = await embeddingService.isAvailable();
+      if (!isOnline) {
+        await ctx.reply(
+          `❌ O serviço de embeddings está offline em ${config.embedding.baseUrl}.\n` +
+          `Inicie-o no seu PC via terminal com: \`npm run embedding:serve\``,
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+
+      const codeSummary = await indexer.indexCodebase(config.filesystem.allowedPaths);
+      const vaultSummary = await indexer.indexVault(config.finance.vaultPath);
+
+      let msg = `✔ *Indexação Concluída com Sucesso!*\n\n`;
+      msg += `📂 *Codebase:*\n`;
+      msg += `• Atualizados: ${codeSummary.filesIndexed}\n`;
+      msg += `• Inalterados: ${codeSummary.filesSkipped}\n`;
+      msg += `• Duração: ${codeSummary.durationMs}ms\n\n`;
+      msg += `📓 *Obsidian Vault:*\n`;
+      msg += `• Atualizados: ${vaultSummary.filesIndexed}\n`;
+      msg += `• Inalterados: ${vaultSummary.filesSkipped}\n`;
+      msg += `• Duração: ${vaultSummary.durationMs}ms\n`;
+
+      await safeReply(ctx, msg, { parse_mode: "Markdown" });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await ctx.reply(`❌ Erro ao reindexar: ${errorMsg}`);
+    }
+  });
+
   bot.command("limpar", async (ctx) => {
     agent.clearHistory();
     await ctx.reply("🧹 Histórico da conversa atual limpo com sucesso! Uma nova sessão foi iniciada.");
@@ -308,6 +398,8 @@ async function main() {
       `📖 *Comandos Disponíveis:*\n\n` +
       `• /status - Ver status do assistente, modelo e busca\n` +
       `• /financas - Ver extrato financeiro e saldo do mês\n` +
+      `• /auditar - Executar auto-auditoria técnica do projeto\n` +
+      `• /reindex - Reindexar repositórios de código e cofre Obsidian\n` +
       `• /memoria - Ver perfil e fatos registrados sobre você\n` +
       `• /regras - Ver persona e diretrizes ativas do Benito\n` +
       `• /aprendizados - Ver feedbacks e lições aprendidas\n` +
