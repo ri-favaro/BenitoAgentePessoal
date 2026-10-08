@@ -8,6 +8,7 @@ import { SelfAuditor } from "./core/self-auditor.js";
 import { KnowledgeIndexer } from "./core/indexer.js";
 import { EmbeddingService } from "./core/embedding-service.js";
 import { VectorStore } from "./core/vector-store.js";
+import { GitHubService } from "./core/github-service.js";
 
 async function readInputWithPasteSupport(
   rl: readline.Interface,
@@ -52,6 +53,7 @@ async function main() {
   const embeddingService = new EmbeddingService();
   const vectorStore = new VectorStore();
   const indexer = new KnowledgeIndexer(embeddingService, vectorStore);
+  const gitHubService = new GitHubService();
   const rl = readline.createInterface({ input, output });
 
   let agentName = await agent.memoryManager.getAgentName();
@@ -77,7 +79,7 @@ async function main() {
   console.log(pc.gray(`• Busca Web: `) + pc.blue(searchDesc));
   console.log(pc.gray(`• Embeddings: `) + pc.cyan(`${config.embedding.baseUrl} (${config.embedding.model})`));
   console.log(pc.gray("--------------------------------------------------"));
-  console.log(pc.dim("Comandos especiais: /financas, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
+  console.log(pc.dim("Comandos especiais: /financas, /issues, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
   console.log("");
   while (true) {
     let userInput: string;
@@ -356,9 +358,39 @@ async function main() {
         continue;
       }
 
+      if (trimmed === "/issues" || trimmed.startsWith("/issues ")) {
+        console.log(pc.cyan("\n[🐙 Consultando issues abertas no GitHub...]"));
+        try {
+          const result = await gitHubService.listIssues({ state: "open", limit: 10 });
+          if (!result.success) {
+            console.log(pc.red(`\n✖ Falha ao listar issues: ${result.error}\n`));
+          } else if (!result.issues || result.issues.length === 0) {
+            console.log(pc.yellow("\nNenhuma issue aberta encontrada no repositório.\n"));
+          } else {
+            console.log(
+              pc.bold(pc.green(`\n✔ ${result.issues.length} issue(s) aberta(s) mais recente(s):\n`))
+            );
+            for (const issue of result.issues) {
+              const labelsStr =
+                issue.labels.length > 0 ? pc.magenta(` [${issue.labels.join(", ")}]`) : "";
+              console.log(
+                `  ${pc.bold(pc.cyan(`#${issue.number}`))} ${pc.yellow(`[${issue.state.toUpperCase()}]`)} ${pc.bold(issue.title)}${labelsStr}`
+              );
+              console.log(pc.dim(pc.gray(`     ${issue.url}`)));
+            }
+            console.log("");
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.log(pc.red(`\n✖ Erro ao consultar issues: ${msg}\n`));
+        }
+        continue;
+      }
+
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
         console.log(pc.bold("  /financas     ") + "- Exibe o extrato financeiro e saldo do mês no Obsidian");
+        console.log(pc.bold("  /issues       ") + "- Lista as issues abertas no GitHub");
         console.log(pc.bold("  /auditar      ") + "- Executa auto-auditoria de latência, sandbox e cobertura");
         console.log(pc.bold("  /reindex      ") + "- Dispara reindexação incremental de código e cofre");
         console.log(pc.bold("  /memoria      ") + "- Exibe o perfil e notas salvas sobre você");
@@ -500,6 +532,16 @@ async function main() {
           } else if (toolName === "run_self_audit") {
             process.stdout.write(
               pc.dim(pc.cyan(`\n[🛡️ Auditoria: executando auto-auditoria do sistema]\n${agentName}: `))
+            );
+          } else if (toolName === "create_github_issue") {
+            const title = (args as { title?: string })?.title || "";
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[🐙 GitHub: criando issue "${title}"]\n${agentName}: `))
+            );
+          } else if (toolName === "list_github_issues") {
+            const state = (args as { state?: string })?.state || "open";
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[🐙 GitHub: listando issues (${state})]\n${agentName}: `))
             );
           }
         },
