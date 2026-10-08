@@ -29,6 +29,7 @@ export interface AppConfig {
   telegram: {
     botToken: string;
     allowedUserIds: number[];
+    sessionTimeoutMinutes: number;
   };
   filesystem: {
     allowedPaths: string[];
@@ -81,6 +82,9 @@ export const config: AppConfig = {
       .filter(Boolean)
       .map((id) => Number(id))
       .filter((id) => !isNaN(id)),
+    sessionTimeoutMinutes: Number(
+      process.env.SESSION_INACTIVITY_TIMEOUT_MINUTES || 120
+    ),
   },
   filesystem: {
     allowedPaths: (process.env.ALLOWED_DIRECTORIES
