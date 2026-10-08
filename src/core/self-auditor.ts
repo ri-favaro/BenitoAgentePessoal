@@ -1,10 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { GitHubService } from "./github-service.js";
 import type { ReasoningAuditEntry } from "./reasoning-logger.js";
-
-const execFileAsync = promisify(execFile);
 
 export interface LogAuditMetric {
   totalTurns: number;
@@ -43,9 +40,11 @@ export interface IssueProposal {
 
 export class SelfAuditor {
   private projectRoot: string;
+  private gitHubService: GitHubService;
 
   constructor(customProjectRoot?: string) {
     this.projectRoot = customProjectRoot || process.cwd();
+    this.gitHubService = new GitHubService(this.projectRoot);
   }
 
   /**
@@ -275,27 +274,17 @@ export class SelfAuditor {
   }
 
   /**
-   * Executa a criação da issue no GitHub via CLI `gh issue create`.
+   * Executa a criação da issue no GitHub via GitHubService (CLI `gh issue create`).
    */
   async createGitHubIssue(proposal: IssueProposal): Promise<{
     success: boolean;
     url?: string;
     error?: string;
   }> {
-    try {
-      const args = ["issue", "create", "--title", proposal.title, "--body", proposal.body];
-      const { stdout } = await execFileAsync("gh", args, {
-        cwd: this.projectRoot,
-        windowsHide: true,
-      });
-
-      const url = stdout.trim();
-      return { success: true, url };
-    } catch (error: any) {
-      return {
-        success: false,
-        error: `Falha ao executar 'gh issue create': ${error.message || String(error)}`,
-      };
-    }
+    return this.gitHubService.createIssue({
+      title: proposal.title,
+      body: proposal.body,
+      labels: proposal.labels,
+    });
   }
 }
