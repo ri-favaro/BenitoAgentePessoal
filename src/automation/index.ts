@@ -89,3 +89,4 @@ if (process.argv[1]?.endsWith("automation/index.ts") || process.argv[1]?.endsWit
     process.exit(1);
   });
 }
+
