@@ -38,6 +38,10 @@ export interface AppConfig {
     vaultPath: string;
     financeDir: string;
   };
+  obsidian: {
+    vaultPath: string;
+    dailyNotesDir: string;
+  };
   embedding: {
     baseUrl: string;
     model: string;
@@ -109,6 +113,24 @@ export const config: AppConfig = {
           process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal",
           "Financas"
         )
+    ),
+  },
+  obsidian: {
+    vaultPath: path.resolve(
+      process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal"
+    ),
+    dailyNotesDir: path.resolve(
+      process.env.OBSIDIAN_DAILY_NOTES_DIR
+        ? path.isAbsolute(process.env.OBSIDIAN_DAILY_NOTES_DIR)
+          ? process.env.OBSIDIAN_DAILY_NOTES_DIR
+          : path.join(
+              process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal",
+              process.env.OBSIDIAN_DAILY_NOTES_DIR
+            )
+        : path.join(
+            process.env.OBSIDIAN_VAULT_PATH || "G:\\CofreObsidian\\AgentePessoal",
+            "Daily Notes"
+          )
     ),
   },
   embedding: {
