@@ -8,7 +8,7 @@
     "dev": "tsx src/cli.ts",
     "start": "tsx src/cli.ts",
     "build": "tsc",
-    "test": "npm run test:reasoning && npm run test:filesystem && npm run test:finance && npm run test:search && npm run test:memory && npm run test:telegram && npm run test:retrieval && npm run test:audit && npm run test:github",
+    "test": "npm run test:reasoning && npm run test:filesystem && npm run test:finance && npm run test:search && npm run test:memory && npm run test:telegram && npm run test:retrieval && npm run test:audit && npm run test:github && npm run test:automation",
     "test:reasoning": "tsx tests/test-reasoning.ts",
     "test:filesystem": "tsx tests/test-filesystem.ts",
     "test:finance": "tsx tests/test-finance.ts",
@@ -18,9 +18,11 @@
     "test:retrieval": "tsx tests/test-retrieval.ts",
     "test:audit": "tsx tests/test-audit.ts",
     "test:github": "tsx tests/test-github.ts",
+    "test:automation": "tsx tests/test-automation.ts",
     "embedding:serve": "powershell -ExecutionPolicy Bypass -File scripts/start-embedding-server.ps1",
     "index": "tsx scripts/index-knowledge.ts",
-    "telegram": "tsx src/interfaces/telegram.ts"
+    "telegram": "tsx src/interfaces/telegram.ts",
+    "automation": "tsx src/automation/index.ts"
   },
   "keywords": [
     "ai",
@@ -39,11 +41,13 @@
     "ai": "^4.1.54",
     "dotenv": "^16.4.7",
     "grammy": "^1.46.0",
+    "node-cron": "^4.6.0",
     "picocolors": "^1.1.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
+    "@types/node-cron": "^3.0.11",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"
   }

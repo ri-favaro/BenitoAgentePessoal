@@ -9,6 +9,7 @@ import { KnowledgeIndexer } from "./core/indexer.js";
 import { EmbeddingService } from "./core/embedding-service.js";
 import { VectorStore } from "./core/vector-store.js";
 import { GitHubService } from "./core/github-service.js";
+import { executeDailyNewsDigest } from "./automation/index.js";
 
 async function readInputWithPasteSupport(
   rl: readline.Interface,
@@ -79,7 +80,7 @@ async function main() {
   console.log(pc.gray(`• Busca Web: `) + pc.blue(searchDesc));
   console.log(pc.gray(`• Embeddings: `) + pc.cyan(`${config.embedding.baseUrl} (${config.embedding.model})`));
   console.log(pc.gray("--------------------------------------------------"));
-  console.log(pc.dim("Comandos especiais: /financas, /issues, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
+  console.log(pc.dim("Comandos especiais: /digest, /financas, /issues, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
   console.log("");
   while (true) {
     let userInput: string;
@@ -387,8 +388,26 @@ async function main() {
         continue;
       }
 
+      if (trimmed === "/digest") {
+        console.log(pc.cyan("\n[📰 Gerando Daily News Digest executivo sob demanda...]"));
+        try {
+          const result = await executeDailyNewsDigest({
+            sendTelegram: false,
+            onProgress: (step) => console.log(pc.gray(`  • ${step}`)),
+          });
+          console.log(pc.bold(pc.green("\n=== 📰 DAILY NEWS DIGEST ===\n")));
+          console.log(result.digest);
+          console.log(pc.cyan("\n============================\n"));
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.log(pc.red(`\n✖ Erro ao gerar Daily News Digest: ${msg}\n`));
+        }
+        continue;
+      }
+
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
+        console.log(pc.bold("  /digest       ") + "- Gera e exibe o Daily News Digest de notícias agora");
         console.log(pc.bold("  /financas     ") + "- Exibe o extrato financeiro e saldo do mês no Obsidian");
         console.log(pc.bold("  /issues       ") + "- Lista as issues abertas no GitHub");
         console.log(pc.bold("  /auditar      ") + "- Executa auto-auditoria de latência, sandbox e cobertura");

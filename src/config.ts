@@ -47,6 +47,11 @@ export interface AppConfig {
   vectorStore: {
     dbPath: string;
   };
+  automation: {
+    digestEnabled: boolean;
+    digestCronSchedule: string;
+    digestTopics: string[];
+  };
 }
 
 export const config: AppConfig = {
@@ -116,6 +121,17 @@ export const config: AppConfig = {
     dbPath: path.resolve(
       process.env.VECTOR_STORE_PATH || path.join(process.cwd(), ".lancedb")
     ),
+  },
+  automation: {
+    digestEnabled: process.env.DIGEST_ENABLED !== "false",
+    digestCronSchedule: process.env.DIGEST_CRON_SCHEDULE || "0 8 * * *",
+    digestTopics: (
+      process.env.DIGEST_TOPICS ||
+      "Inteligência Artificial e LLMs locais, Engenharia de Software e Arquitetura, TypeScript e Node.js"
+    )
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean),
   },
 };
 
