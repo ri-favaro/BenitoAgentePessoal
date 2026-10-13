@@ -7,6 +7,7 @@ import { createFinanceTools } from "./finance-tools.js";
 import { createRetrievalTools } from "./retrieval-tools.js";
 import { createAuditTools } from "./audit-tools.js";
 import { createGitHubTools } from "./github-tools.js";
+import { createObsidianTools } from "./obsidian-tools.js";
 import { EmbeddingService } from "../core/embedding-service.js";
 import { VectorStore } from "../core/vector-store.js";
 import { KnowledgeIndexer } from "../core/indexer.js";
@@ -57,6 +58,11 @@ export function getAgentTools(
     ...createFilesystemTools(config.filesystem.allowedPaths),
     ...createWebTools(webToolsState),
     ...createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths),
+    ...createObsidianTools(
+      config.obsidian.vaultPath,
+      config.obsidian.dailyNotesDir,
+      config.filesystem.allowedPaths
+    ),
     ...createRetrievalTools(
       vectorStore,
       embeddingService,

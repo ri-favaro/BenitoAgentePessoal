@@ -17,6 +17,7 @@ import {
   createAutomationScheduler,
   executeDailyNewsDigest,
 } from "../automation/index.js";
+import { createObsidianTools } from "../tools/obsidian-tools.js";
 
 async function main() {
   if (!config.telegram.botToken) {
@@ -31,6 +32,11 @@ async function main() {
 
   const agent = new PersonalAgent();
   const financeTools = createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths);
+  const obsidianTools = createObsidianTools(
+    config.obsidian.vaultPath,
+    config.obsidian.dailyNotesDir,
+    config.filesystem.allowedPaths
+  );
   const auditor = new SelfAuditor();
   const embeddingService = new EmbeddingService();
   const vectorStore = new VectorStore();
@@ -130,6 +136,8 @@ async function main() {
       `Estou conectado ao seu computador e pronto para ajudar com memória persistente, busca web e gerenciamento de notas.\n\n` +
       `*Comandos úteis:*\n` +
       `• /status - Ver modelo e status da sessão\n` +
+      `• /hoje - Ver a Daily Note do dia no Obsidian\n` +
+      `• /tarefas - Listar tarefas e checkboxes abertas\n` +
       `• /digest - Gerar e receber o Daily News Digest agora\n` +
       `• /financas - Ver extrato financeiro e saldo do mês\n` +
       `• /memoria - Ver perfil gravado sobre você\n` +
@@ -435,10 +443,50 @@ async function main() {
     }
   });
 
+  bot.command("hoje", async (ctx) => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res: any = await (obsidianTools.get_daily_note as any).execute({ date: today });
+      if (!res.exists || !res.content) {
+        await ctx.reply(
+          `📅 *Daily Note de Hoje (${today}) ainda não foi criada.*\n\n` +
+          `Para registrar uma nota, tarefa ou gasto, envie uma mensagem como:\n` +
+          `• _"Anote na daily note de hoje: reunião com a equipe às 14h"_\n` +
+          `• _"Adicione a tarefa: estudar LanceDB para hoje"_`,
+          { parse_mode: "Markdown" }
+        );
+      } else {
+        await safeReply(ctx, res.content, { parse_mode: "Markdown" });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await ctx.reply(`❌ Erro ao consultar Daily Note: ${msg}`);
+    }
+  });
+
+  bot.command("tarefas", async (ctx) => {
+    try {
+      const res: any = await (obsidianTools.list_vault_tasks as any).execute({
+        status: "open",
+        limit: 30,
+      });
+      if (!res.success) {
+        await ctx.reply(`❌ Erro ao buscar tarefas: ${res.error}`);
+      } else {
+        await safeReply(ctx, res.summary, { parse_mode: "Markdown" });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await ctx.reply(`❌ Erro ao listar tarefas: ${msg}`);
+    }
+  });
+
   bot.command("ajuda", async (ctx) => {
     const helpMsg =
       `📖 *Comandos Disponíveis:*\n\n` +
       `• /status - Ver status do assistente, modelo e busca\n` +
+      `• /hoje - Ver a Daily Note do dia no Obsidian\n` +
+      `• /tarefas - Listar tarefas e checkboxes abertas no cofre\n` +
       `• /digest - Gerar e receber o Daily News Digest agora\n` +
       `• /financas - Ver extrato financeiro e saldo do mês\n` +
       `• /auditar - Executar auto-auditoria técnica do projeto\n` +

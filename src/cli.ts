@@ -10,6 +10,7 @@ import { EmbeddingService } from "./core/embedding-service.js";
 import { VectorStore } from "./core/vector-store.js";
 import { GitHubService } from "./core/github-service.js";
 import { executeDailyNewsDigest } from "./automation/index.js";
+import { createObsidianTools } from "./tools/obsidian-tools.js";
 
 async function readInputWithPasteSupport(
   rl: readline.Interface,
@@ -50,6 +51,11 @@ async function readInputWithPasteSupport(
 async function main() {
   const agent = new PersonalAgent();
   const financeTools = createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths);
+  const obsidianTools = createObsidianTools(
+    config.obsidian.vaultPath,
+    config.obsidian.dailyNotesDir,
+    config.filesystem.allowedPaths
+  );
   const auditor = new SelfAuditor();
   const embeddingService = new EmbeddingService();
   const vectorStore = new VectorStore();
@@ -80,7 +86,7 @@ async function main() {
   console.log(pc.gray(`• Busca Web: `) + pc.blue(searchDesc));
   console.log(pc.gray(`• Embeddings: `) + pc.cyan(`${config.embedding.baseUrl} (${config.embedding.model})`));
   console.log(pc.gray("--------------------------------------------------"));
-  console.log(pc.dim("Comandos especiais: /digest, /financas, /issues, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
+  console.log(pc.dim("Comandos especiais: /hoje, /tarefas, /digest, /financas, /issues, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
   console.log("");
   while (true) {
     let userInput: string;
@@ -405,8 +411,54 @@ async function main() {
         continue;
       }
 
+      if (trimmed === "/hoje") {
+        console.log(pc.cyan("\n[📅 Consultando Daily Note de hoje no Obsidian...]"));
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const res: any = await (obsidianTools.get_daily_note as any).execute({ date: today });
+          if (!res.exists || !res.content) {
+            console.log(
+              pc.yellow(
+                `\nNenhuma Daily Note encontrada para hoje (${today}).\nPeça ao Benito: "Crie a Daily Note de hoje" ou "Adicione uma nota na daily note de hoje".\n`
+              )
+            );
+          } else {
+            console.log(pc.bold(pc.green(`\n=== 📅 DAILY NOTE - ${today} ===\n`)));
+            console.log(res.content);
+            console.log(pc.cyan("================================\n"));
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.log(pc.red(`\n✖ Erro ao consultar Daily Note: ${msg}\n`));
+        }
+        continue;
+      }
+
+      if (trimmed === "/tarefas" || trimmed.startsWith("/tarefas ")) {
+        console.log(pc.cyan("\n[📋 Escaneando tarefas e checkboxes abertas no Obsidian...]"));
+        try {
+          const res: any = await (obsidianTools.list_vault_tasks as any).execute({
+            status: "open",
+            limit: 40,
+          });
+          if (!res.success) {
+            console.log(pc.red(`\n✖ Erro ao buscar tarefas: ${res.error}\n`));
+          } else {
+            console.log(pc.bold(pc.green("\n=== 📋 TAREFAS PENDENTES NO COFRE ===\n")));
+            console.log(res.summary);
+            console.log(pc.cyan("\n=====================================\n"));
+          }
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.log(pc.red(`\n✖ Erro ao listar tarefas: ${msg}\n`));
+        }
+        continue;
+      }
+
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
+        console.log(pc.bold("  /hoje         ") + "- Exibe a Daily Note do dia no cofre do Obsidian");
+        console.log(pc.bold("  /tarefas      ") + "- Lista tarefas e checkboxes pendentes (- [ ]) no cofre");
         console.log(pc.bold("  /digest       ") + "- Gera e exibe o Daily News Digest de notícias agora");
         console.log(pc.bold("  /financas     ") + "- Exibe o extrato financeiro e saldo do mês no Obsidian");
         console.log(pc.bold("  /issues       ") + "- Lista as issues abertas no GitHub");

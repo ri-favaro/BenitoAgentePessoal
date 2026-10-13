@@ -92,6 +92,23 @@ export function formatToolFeedback(
     case "run_self_audit": {
       return `🛡️ Executando auto-auditoria do sistema...`;
     }
+    case "append_daily_note": {
+      const s = typeof args.section === "string" ? ` [${args.section}]` : "";
+      return `📅 Registrando na Daily Note${s}...`;
+    }
+    case "get_daily_note": {
+      return `📅 Consultando Daily Note...`;
+    }
+    case "list_vault_tasks": {
+      return `📋 Escaneando tarefas e checkboxes no cofre...`;
+    }
+    case "toggle_vault_task": {
+      const c = args.completed ? "concluída" : "reaberta";
+      return `☑️ Marcando tarefa como ${c}...`;
+    }
+    case "suggest_vault_links": {
+      return `🔗 Mapeando conexões semânticas com o cofre...`;
+    }
     default:
       return `⚙️ Executando: ${toolName}...`;
   }
