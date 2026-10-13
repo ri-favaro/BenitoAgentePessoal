@@ -13,6 +13,10 @@ import { SelfAuditor } from "../core/self-auditor.js";
 import { KnowledgeIndexer } from "../core/indexer.js";
 import { EmbeddingService } from "../core/embedding-service.js";
 import { VectorStore } from "../core/vector-store.js";
+import {
+  createAutomationScheduler,
+  executeDailyNewsDigest,
+} from "../automation/index.js";
 
 async function main() {
   if (!config.telegram.botToken) {
@@ -33,6 +37,8 @@ async function main() {
   const indexer = new KnowledgeIndexer(embeddingService, vectorStore);
   const sessionTracker = new SessionTracker(config.telegram.sessionTimeoutMinutes);
   const bot = new Bot(config.telegram.botToken);
+  const scheduler = createAutomationScheduler(bot);
+  scheduler.startAll();
 
   let agentName = await agent.memoryManager.getAgentName();
 
@@ -124,6 +130,7 @@ async function main() {
       `Estou conectado ao seu computador e pronto para ajudar com memória persistente, busca web e gerenciamento de notas.\n\n` +
       `*Comandos úteis:*\n` +
       `• /status - Ver modelo e status da sessão\n` +
+      `• /digest - Gerar e receber o Daily News Digest agora\n` +
       `• /financas - Ver extrato financeiro e saldo do mês\n` +
       `• /memoria - Ver perfil gravado sobre você\n` +
       `• /regras - Ver persona e diretrizes ativas\n` +
@@ -156,11 +163,16 @@ async function main() {
     const inactiveDesc =
       inactiveMin !== null ? ` (última interação há ${inactiveMin} min)` : " (nova sessão)";
 
+    const automationDesc = config.automation.digestEnabled
+      ? `🟢 Ativo (\`${config.automation.digestCronSchedule}\`)`
+      : "🔴 Desativado";
+
     const statusMsg =
       `📊 *Status do Agente: ${agentName}*\n\n` +
       `• *Status:* 🟢 Online (Long Polling)\n` +
       `• *Provedor LLM:* ${modelName}\n` +
       `• *Busca Web:* ${searchDesc}\n` +
+      `• *Daily Digest:* ${automationDesc}\n` +
       `• *Mensagens na Sessão Atual:* ${history.length}\n` +
       `• *TTL de Inatividade:* ${ttlDesc}${inactiveDesc}\n` +
       `• *Tópicos Modulares de Memória:* ${topics.length}\n` +
@@ -404,10 +416,30 @@ async function main() {
     await ctx.reply("🧹 Histórico da conversa atual limpo com sucesso! Uma nova sessão foi iniciada.");
   });
 
+  bot.command("digest", async (ctx) => {
+    await ctx.reply("⏳ *Gerando o Daily News Digest executivo agora...*", {
+      parse_mode: "Markdown",
+    });
+    try {
+      const result = await executeDailyNewsDigest({
+        bot,
+        chatIds: [ctx.chat.id],
+        sendTelegram: true,
+      });
+      if (!result.success && result.error) {
+        await ctx.reply(`⚠️ Aviso durante a geração do Digest: ${result.error}`);
+      }
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      await ctx.reply(`❌ Falha ao processar o Daily News Digest: ${errorMsg}`);
+    }
+  });
+
   bot.command("ajuda", async (ctx) => {
     const helpMsg =
       `📖 *Comandos Disponíveis:*\n\n` +
       `• /status - Ver status do assistente, modelo e busca\n` +
+      `• /digest - Gerar e receber o Daily News Digest agora\n` +
       `• /financas - Ver extrato financeiro e saldo do mês\n` +
       `• /auditar - Executar auto-auditoria técnica do projeto\n` +
       `• /reindex - Reindexar repositórios de código e cofre Obsidian\n` +
@@ -727,13 +759,18 @@ async function main() {
       ? `${config.telegram.sessionTimeoutMinutes} min`
       : "Desativado";
   console.log(pc.gray(`• TTL de Inatividade:  `) + pc.blue(ttlLog));
+  const digestLog = config.automation.digestEnabled
+    ? `${config.automation.digestCronSchedule} (${config.automation.digestTopics.length} tópicos)`
+    : "Desativado";
+  console.log(pc.gray(`• Daily News Digest:   `) + (config.automation.digestEnabled ? pc.green(digestLog) : pc.red(digestLog)));
   console.log(pc.gray("--------------------------------------------------"));
   console.log(pc.green("✔ Bot do Benito conectado ao Telegram com sucesso!"));
   console.log(pc.dim("Aguardando mensagens via Long Polling... (Pressione Ctrl+C para encerrar)\n"));
 
   // Tratamento de encerramento gracioso
   const stopHandler = () => {
-    console.log(pc.yellow("\nEncerrando conexão com o Telegram..."));
+    console.log(pc.yellow("\nEncerrando conexão com o Telegram e rotinas agendadas..."));
+    scheduler.stopAll();
     bot.stop();
     process.exit(0);
   };

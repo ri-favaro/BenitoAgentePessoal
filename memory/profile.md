@@ -13,3 +13,5 @@
 - **Projeto Agente Pessoal:** Desenvolvimento de um assistente de IA com memória local, suporte a LLM local (Ollama/llama.cpp) e ferramentas de automação.
 
 ## Fatos e Notas Aprendidas
+- [Preferência] Luiz Ricardo - Valoriza agilidade na inscrição para vagas, prefere adaptar currículo para cada vaga específica, e busca automação de aprendizado diário com resumos práticos. *(Registrado em: 2026-10-12)*
+- [Carreira] Luiz Ricardo - 6 meses como Analista de Projetos, Engenheiro da Computação, MBA em Engenharia de Software em andamento. Muito contato com LLMs para código no trabalho atual. Insatisfeito com remuneração e busca por novas oportunidades. *(Registrado em: 2026-10-12)*
