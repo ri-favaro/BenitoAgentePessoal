@@ -76,6 +76,23 @@ async function runGitHubTests() {
         totalFound: mockItems.length,
       };
     }
+
+    async getIssue(num: number) {
+      if (num === 404) {
+        return { success: false, error: "Issue #404 não encontrada." };
+      }
+      return {
+        success: true,
+        issue: {
+          number: num,
+          title: "feat(tools): issue individual",
+          body: "Corpo detalhado da issue.",
+          state: "OPEN",
+          labels: ["enhancement"],
+          url: `https://github.com/ri-favaro/BenitoAgentePessoal/issues/${num}`,
+        },
+      };
+    }
   }
 
   const mockService = new MockGitHubService();
@@ -124,6 +141,22 @@ async function runGitHubTests() {
   assert.strictEqual(listEmptyRes.totalFound, 0);
   assert.ok(listEmptyRes.summary.includes("Nenhuma issue encontrada"));
   console.log("✔ list_github_issues com zero resultados validado!");
+
+  // 3.5 get_github_issue - Sucesso
+  const getIssueRes: any = await tools.get_github_issue.execute({
+    issueNumber: 21,
+  });
+  assert.strictEqual(getIssueRes.success, true);
+  assert.strictEqual(getIssueRes.issue.number, 21);
+  assert.ok(getIssueRes.summary.includes("#21 [OPEN]"));
+  console.log("✔ get_github_issue executou e retornou detalhes com sucesso!");
+
+  // 3.6 get_github_issue - Não encontrada
+  const getIssueFailRes: any = await tools.get_github_issue.execute({
+    issueNumber: 404,
+  });
+  assert.strictEqual(getIssueFailRes.success, false);
+  console.log("✔ get_github_issue tratou issue inexistente com sucesso!");
 
   // ==========================================
   // 4. Testando Integração com SelfAuditor

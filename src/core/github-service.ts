@@ -41,6 +41,23 @@ export interface ListIssuesResult {
   error?: string;
 }
 
+export interface GitHubIssueDetail {
+  number: number;
+  title: string;
+  body: string;
+  state: string;
+  labels: string[];
+  url: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GetIssueResult {
+  success: boolean;
+  issue?: GitHubIssueDetail;
+  error?: string;
+}
+
 export class GitHubService {
   private projectRoot: string;
 
@@ -184,4 +201,61 @@ export class GitHubService {
       };
     }
   }
+
+  /**
+   * Obtém os detalhes completos de uma issue específica via CLI `gh issue view <number> --json ...`.
+   */
+  async getIssue(issueNumber: number, repo?: string): Promise<GetIssueResult> {
+    try {
+      const args = [
+        "issue",
+        "view",
+        String(issueNumber),
+        "--json",
+        "number,title,body,state,labels,url,createdAt,updatedAt",
+      ];
+
+      if (repo && repo.trim()) {
+        args.push("--repo", repo.trim());
+      }
+
+      const { stdout } = await execFileAsync("gh", args, {
+        cwd: this.projectRoot,
+        windowsHide: true,
+      });
+
+      const rawJson = stdout.trim();
+      if (!rawJson) {
+        return {
+          success: false,
+          error: `Issue #${issueNumber} não encontrada ou vazia.`,
+        };
+      }
+
+      const parsed = JSON.parse(rawJson);
+      const issue: GitHubIssueDetail = {
+        number: parsed.number,
+        title: parsed.title,
+        body: parsed.body || "",
+        state: parsed.state,
+        labels: Array.isArray(parsed.labels)
+          ? parsed.labels.map((l: any) => (typeof l === "string" ? l : l.name || ""))
+          : [],
+        url: parsed.url,
+        createdAt: parsed.createdAt,
+        updatedAt: parsed.updatedAt,
+      };
+
+      return {
+        success: true,
+        issue,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: `Falha ao executar 'gh issue view #${issueNumber}': ${error?.message || String(error)}`,
+      };
+    }
+  }
 }
+
