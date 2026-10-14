@@ -251,16 +251,38 @@ export class PersonalAgent {
 
     // Guarda de Síntese Final Obrigatória:
     // Se o ciclo de passos terminou num resultado de ferramenta (sem mensagem final do assistente),
-    // ou se o modelo chamou ferramentas e terminou mudo,
-    // ou se a resposta foi truncada (finishReason === 'length' ou menos de 80 caracteres sem pontuação final),
+    // ou se o modelo chamou ferramentas e terminou mudo/incompleto,
+    // ou se a resposta foi truncada (finishReason === 'length' ou corte no meio de frase sem pontuação final),
     // forçamos uma geração final direta SEM ferramentas para responder imediatamente ao usuário.
     const lastMessage = this.messages[this.messages.length - 1];
+    const secondLastMessage =
+      this.messages.length >= 2 ? this.messages[this.messages.length - 2] : null;
     const endsWithTool = lastMessage && lastMessage.role === "tool";
     const trimmedFull = stripThinking(fullText).trim();
-    const isTruncated =
-      finishReason === "length" ||
-      (hadToolCalls && trimmedFull.length > 0 && trimmedFull.length < 80 && !/[.!?:]$/.test(trimmedFull));
-    const needsSynthesis = endsWithTool || (hadToolCalls && !trimmedFull) || isTruncated;
+
+    // Detecta corte abrupto no meio de palavra ou frase após execução de ferramentas
+    const endsWithoutPunctuation =
+      hadToolCalls &&
+      trimmedFull.length > 0 &&
+      !/[.!?:)\]\n]$/.test(trimmedFull) &&
+      !trimmedFull.endsWith("```");
+
+    // Verifica se uma ferramenta foi executada mas não recebeu explicação conclusiva
+    const toolNeedsExplanation =
+      hadToolCalls &&
+      (endsWithTool ||
+        (secondLastMessage &&
+          secondLastMessage.role === "tool" &&
+          (!lastMessage?.content ||
+            (typeof lastMessage.content === "string" &&
+              lastMessage.content.trim().length < 50))));
+
+    const isTruncated = finishReason === "length" || endsWithoutPunctuation;
+    const needsSynthesis =
+      endsWithTool ||
+      toolNeedsExplanation ||
+      (hadToolCalls && !trimmedFull) ||
+      isTruncated;
 
     if (needsSynthesis) {
       if (trimmedFull.length > 0) {
@@ -271,10 +293,10 @@ export class PersonalAgent {
 
       const synthesisPrompt =
         systemPrompt +
-        "\n\nAVISO CRÍTICO DO SISTEMA: O ciclo de ferramentas foi encerrado e você NÃO tem mais acesso a nenhuma ferramenta. Com base em TODOS os dados, snippets, links e leituras obtidas nas mensagens anteriores, elabore e envie AGORA sua resposta final, completa, precisa e traduzida para o português brasileiro." +
+        "\n\nAVISO CRÍTICO DO SISTEMA: O ciclo de ferramentas foi encerrado e você NÃO tem mais acesso a nenhuma ferramenta. Com base em TODOS os dados, retornos das ferramentas e leituras obtidas nas mensagens anteriores, elabore e envie AGORA sua resposta final, completa, precisa e traduzida para o português brasileiro." +
         (isTruncated && trimmedFull.length > 0
-          ? ` Sua mensagem anterior começou com "${trimmedFull.slice(-80)}", continue exatamente a partir daí para concluir a resposta sem repetir o que já foi dito.`
-          : " Entregue a resposta conclusiva diretamente ao usuário com as informações já coletadas.");
+          ? ` Sua mensagem anterior parou abruptamente em "${trimmedFull.slice(-60)}". Conclua a linha de raciocínio e apresente o resultado final das operações sem deixar frases incompletas.`
+          : " Entregue a resposta conclusiva diretamente ao usuário com as informações já coletadas e os resultados das operações.");
 
       const synthesis = streamText({
         model,

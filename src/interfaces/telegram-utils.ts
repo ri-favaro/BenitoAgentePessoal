@@ -109,6 +109,30 @@ export function formatToolFeedback(
     case "suggest_vault_links": {
       return `🔗 Mapeando conexões semânticas com o cofre...`;
     }
+    case "create_github_issue": {
+      const t = typeof args.title === "string" ? args.title : "";
+      return `🐙 Criando issue no GitHub: "${t}"...`;
+    }
+    case "list_github_issues": {
+      return `🐙 Consultando issues no GitHub...`;
+    }
+    case "get_github_issue": {
+      const num = typeof args.issueNumber === "number" ? `#${args.issueNumber}` : "";
+      return `🐙 Consultando detalhes da issue ${num}...`;
+    }
+    case "execute_workspace_command": {
+      const c = typeof args.command === "string" ? args.command : "";
+      return `⚡ Executando comando no workspace: ${c}...`;
+    }
+    case "prepare_coding_task": {
+      const num = typeof args.issueNumber === "number" ? `#${args.issueNumber}` : "";
+      return `📦 Empacotando contexto da issue ${num} para o AGY CLI...`;
+    }
+    case "delegate_issue_to_coding_agent": {
+      const num = typeof args.issueNumber === "number" ? `#${args.issueNumber}` : "";
+      const isDry = args.dryRun ? " (simulação)" : " (executando com AGY CLI - aguarde...)";
+      return `🤖 Delegando issue ${num} para coding agent${isDry}...`;
+    }
     default:
       return `⚙️ Executando: ${toolName}...`;
   }

@@ -614,6 +614,34 @@ async function main() {
             process.stdout.write(
               pc.dim(pc.cyan(`\n[🐙 GitHub: listando issues (${state})]\n${agentName}: `))
             );
+          } else if (toolName === "get_github_issue") {
+            const num = (args as { issueNumber?: number })?.issueNumber || "";
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[🐙 GitHub: consultando detalhes da issue #${num}]\n${agentName}: `))
+            );
+          } else if (toolName === "execute_workspace_command") {
+            const cmd = (args as { command?: string })?.command || "";
+            const cmdArgs = ((args as { args?: string[] })?.args || []).join(" ");
+            process.stdout.write(
+              pc.dim(pc.yellow(`\n[⚡ Workspace: executando "${cmd} ${cmdArgs}".trim()]\n${agentName}: `))
+            );
+          } else if (toolName === "prepare_coding_task") {
+            const num = (args as { issueNumber?: number })?.issueNumber || "";
+            process.stdout.write(
+              pc.dim(pc.blue(`\n[📦 Task Packer: empacotando contexto da issue #${num} para AGY CLI]\n${agentName}: `))
+            );
+          } else if (toolName === "delegate_issue_to_coding_agent") {
+            const num = (args as { issueNumber?: number })?.issueNumber || "";
+            const isDry = (args as { dryRun?: boolean })?.dryRun
+              ? " (modo simulação/dry-run)"
+              : " (em execução com AGY CLI - aguarde...)";
+            process.stdout.write(
+              pc.dim(pc.magenta(`\n[🤖 Coding Agent: delegando issue #${num}${isDry}]\n${agentName}: `))
+            );
+          } else {
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[⚙️ Ferramenta: executando ${toolName}]\n${agentName}: `))
+            );
           }
         },
       });
