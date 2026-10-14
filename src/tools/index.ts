@@ -8,6 +8,7 @@ import { createRetrievalTools } from "./retrieval-tools.js";
 import { createAuditTools } from "./audit-tools.js";
 import { createGitHubTools } from "./github-tools.js";
 import { createObsidianTools } from "./obsidian-tools.js";
+import { createOrchestrationTools } from "./orchestration-tools.js";
 import { EmbeddingService } from "../core/embedding-service.js";
 import { VectorStore } from "../core/vector-store.js";
 import { KnowledgeIndexer } from "../core/indexer.js";
@@ -72,5 +73,10 @@ export function getAgentTools(
     ),
     ...createAuditTools(auditor),
     ...createGitHubTools(gitHubService),
+    ...createOrchestrationTools({
+      gitHubService,
+      vectorStore,
+      embeddingService,
+    }),
   };
 }

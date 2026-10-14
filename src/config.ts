@@ -56,6 +56,11 @@ export interface AppConfig {
     digestCronSchedule: string;
     digestTopics: string[];
   };
+  orchestration: {
+    agyBinPath: string;
+    allowedCommands: string[];
+    timeoutMs: number;
+  };
 }
 
 export const config: AppConfig = {
@@ -154,6 +159,16 @@ export const config: AppConfig = {
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean),
+  },
+  orchestration: {
+    agyBinPath: process.env.AGY_BIN_PATH || "agy",
+    allowedCommands: (
+      process.env.ORCHESTRATION_ALLOWED_COMMANDS || "agy,npm,npx,git,node"
+    )
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean),
+    timeoutMs: Number(process.env.ORCHESTRATION_TIMEOUT_MS || 300000),
   },
 };
 

@@ -54,21 +54,30 @@ src/
 │   └── telegram-utils.ts   # SessionTracker (TTL por inatividade), autorização e split
 ├── memory/           # Gestão de memória persistente
 │   └── memory-manager.ts   # Leitura de Markdown, tópicos modulares e /consolidar
+├── orchestration/    # Orquestração técnica hierárquica e runners (Issue #21)
+│   ├── terminal-runner.ts     # Runner seguro com whitelist de comandos e timeout
+│   ├── task-packer.ts         # Empacotador de contexto (Issue + RAG + Regras de engenharia)
+│   └── coding-orchestrator.ts # Orquestrador de delegação para AGY CLI e validação pós-execução
+├── automation/       # Rotinas agendadas desacopladas (Issue #18)
+│   ├── scheduler.ts           # TaskScheduler com expressões cron e trava de concorrência
+│   └── jobs/                  # Jobs executáveis (daily-news-digest)
 ├── tools/            # Ferramentas expostas ao modelo (index.ts)
-│   ├── web-tools.ts        # Busca web (Tavily/SearXNG), Jina Reader e cache anti-loop
-│   ├── filesystem-tools.ts # Leitura/escrita de arquivos com sandbox
-│   ├── finance-tools.ts    # Gestão financeira com carteiras (CC/VA) e saldo mestre O(1)
-│   ├── retrieval-tools.ts  # Busca semântica (search_codebase, search_vault, reindex_knowledge)
-│   ├── github-tools.ts     # Gestão de issues no GitHub (create_github_issue, list_github_issues)
-│   ├── audit-tools.ts      # Auto-auditoria holística (run_self_audit)
-│   ├── path-guard.ts       # Validação e restrição de diretórios autorizados
-│   └── memory-tools.ts     # Ferramentas para o modelo persistir fatos e aprendizados
+│   ├── web-tools.ts           # Busca web (Tavily/SearXNG), Jina Reader e cache anti-loop
+│   ├── filesystem-tools.ts    # Leitura/escrita de arquivos com sandbox
+│   ├── finance-tools.ts       # Gestão financeira com carteiras (CC/VA) e saldo mestre O(1)
+│   ├── obsidian-tools.ts      # Second Brain com Daily Notes e tarefas (Issue #17)
+│   ├── retrieval-tools.ts     # Busca semântica (search_codebase, search_vault, reindex_knowledge)
+│   ├── github-tools.ts        # Gestão de issues no GitHub (create_github_issue, list_github_issues, get_github_issue)
+│   ├── orchestration-tools.ts # Ferramentas para console e delegação ao AGY CLI (Issue #21)
+│   ├── audit-tools.ts         # Auto-auditoria holística (run_self_audit)
+│   ├── path-guard.ts          # Validação e restrição de diretórios autorizados
+│   └── memory-tools.ts        # Ferramentas para o modelo persistir fatos e aprendizados
 scripts/              # Utilitários de inicialização e manutenção
 ├── start-embedding-server.ps1 # Launcher do llama-server com consumo otimizado (270MB RAM)
 └── index-knowledge.ts         # Script CLI para disparar indexação em lote (npm run index)
 .lancedb/             # Armazenamento vetorial local embutido (tabelas: codebase, vault)
 logs/                 # Auditoria contínua de raciocínio e intenções (reasoning.log JSONL)
-tests/                # Suíte de testes automatizados (9 suítes com 100% de cobertura funcional)
+tests/                # Suíte de testes automatizados (11 suítes com 100% de cobertura funcional)
 memory/               # Memória persistente do Benito (profile.md, rules.md, learnings.md, topics/)
 ```
 
@@ -149,6 +158,23 @@ Ao evoluir os módulos `src/core/self-auditor.ts`, `src/core/github-service.ts` 
 
 ---
 
+## 🛠️ Orquestração Técnica & Coding LLMs (Issue #21)
+
+Ao manter ou evoluir recursos em `src/orchestration/` e `src/tools/orchestration-tools.ts`:
+
+1. **Desacoplamento de Janelas de Contexto (Context Decoupling):**
+   - O Benito opera com janela de 24k tokens no Qwen 9B local para especificação, supervisão e RAG sem ser sobrecarregado por arquivos gigantes.
+   - O agente de coding (**AGY CLI**) roda em processo isolado (`agy --prompt "..." --dangerously-skip-permissions`), carregando árvores inteiras de código e executando lint/diff de forma autônoma.
+2. **Defesa em Profundidade & Sandbox (`TerminalRunner`):**
+   - **Whitelist de Comandos:** Apenas executáveis permitidos (`agy`, `npm`, `npx`, `git`, `node`) podem ser executados pelo runner. Qualquer outro binário é bloqueado.
+   - **Sandbox de CWD:** O diretório de execução deve ser validado via `validateAllowedPath` contra `ALLOWED_DIRECTORIES`.
+   - **Controle de Timeout:** Comandos possuem tempo limite configurado (padrão 5 minutos / 300.000 ms) com abort gracioso para prevenir travamentos de terminal.
+3. **Módulo de Context Packing (`TaskPacker`):**
+   - Estrutura as instruções do AGY com 5 seções padronizadas: Objetivo & Metadados da Issue, Requisitos, Diretrizes de Engenharia do Repositório, Snippets de Código via LanceDB e Critérios Obrigatórios de Entrega (branch dedicada, testes e Conventional Commits em pt-br).
+4. **Protocolo Estrito Human-in-the-Loop para Execução de Código:**
+   - **Regra Inviolável:** O Benito NUNCA dispara a ferramenta `delegate_issue_to_coding_agent` em modo de execução real (`confirmedByUser: true`) sem apresentar a proposta e obter autorização expressa do Luiz Ricardo.
+   - Para prévias e inspeção de prompt estruturado, utilize sempre `prepare_coding_task` ou o parâmetro `dryRun: true`.
+
 ## 💬 Módulo do Telegram & Session Tracker (TTL de Inatividade)
 
 Ao dar manutenção na interface do Telegram (`src/interfaces/telegram.ts` e `telegram-utils.ts`):
@@ -176,8 +202,8 @@ Ao dar manutenção na interface do Telegram (`src/interfaces/telegram.ts` e `te
 | `npm run embedding:serve` | Inicia o servidor local do llama-server para embeddings (EmbeddingGemma-2) |
 | `npm run index` | Dispara a indexação incremental do codebase e cofre Obsidian |
 | `npm run build` | Compila o projeto com o TypeScript (`tsc`) |
-| `npm test` | Executa a suíte completa de testes automatizados (todas as 9 suítes) |
-| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`) |
+| `npm test` | Executa a suíte completa de testes automatizados (todas as 11 suítes) |
+| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`, `automation`, `obsidian`, `orchestration`) |
 
 ### Regras Gerais
 - **Idioma de Commits:** Sempre em **Português do Brasil (pt-br)** com Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.).

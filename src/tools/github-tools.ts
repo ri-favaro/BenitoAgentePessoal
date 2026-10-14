@@ -124,5 +124,46 @@ export function createGitHubTools(gitHubService?: GitHubService) {
         }
       },
     }),
+
+    get_github_issue: tool({
+      description:
+        "Consulta os detalhes completos de uma issue específica do GitHub (título, descrição detalhada em Markdown, estado, labels e URL). Útil para inspecionar requisitos e empacotar tarefas de implementação para agentes de coding.",
+      parameters: z.object({
+        issueNumber: z
+          .number()
+          .describe("Número identificador da issue no GitHub (ex: 15, 21)."),
+        repo: z
+          .string()
+          .optional()
+          .describe(
+            "Repositório alvo no formato 'owner/repo'. Se omitido, utiliza o repositório atual do projeto."
+          ),
+      }),
+      execute: async ({ issueNumber, repo }) => {
+        try {
+          const result = await service.getIssue(issueNumber, repo);
+          if (result.success && result.issue) {
+            const issue = result.issue;
+            return {
+              success: true,
+              issue,
+              summary: `#${issue.number} [${issue.state}] ${issue.title}\nLabels: ${
+                issue.labels.join(", ") || "sem labels"
+              }\nURL: ${issue.url}\n\n${issue.body}`,
+            };
+          }
+
+          return {
+            success: false,
+            error: result.error || `Issue #${issueNumber} não encontrada.`,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: `Erro ao executar get_github_issue: ${error?.message || String(error)}`,
+          };
+        }
+      },
+    }),
   };
 }
