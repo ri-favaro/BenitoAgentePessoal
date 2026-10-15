@@ -47,88 +47,140 @@ export interface CareerMarketReport {
 /**
  * Conteúdo padrão para inicialização do Perfil Profissional Master de Luiz Ricardo.
  */
-export const INITIAL_CAREER_PROFILE_CONTENT = `# 👨‍💻 Perfil Profissional Master - Luiz Ricardo
+export const INITIAL_CAREER_PROFILE_CONTENT = `# 👨‍💻 Perfil Profissional Master - Luiz Ricardo Favaro
 
-> **Aviso ao Benito:** Este documento é a **única fonte da verdade** sobre o histórico técnico, acadêmico e projetos práticos de Luiz Ricardo. **Nunca invente** tecnologias, experiências profissionais ou cargos não listados aqui.
-
----
-
-## 📌 Resumo Executivo & Posicionamento
-
-- **Nome:** Luiz Ricardo
-- **Formação Principal:** Engenheiro da Computação
-- **Especialização:** Pós-graduando no MBA em Engenharia de Software (USP/Esalq)
-- **Tempo de Atuação:** 6 meses de carreira em Engenharia de Software / Projetos de TI
-- **Alvo Estratégico de Carreira:** Desenvolvedor / Engenheiro de Software Pleno (Mid-level) - Backend / Fullstack
-- **Foco Técnico:** Aplicações escaláveis em TypeScript e Node.js, arquitetura desacoplada, microsserviços, modelagem SQL, Docker e boas práticas de engenharia de software (Clean Architecture, DDD, TDD).
+> **Aviso ao Benito:** Este documento é a **única fonte da verdade** sobre o histórico técnico, acadêmico, profissional e projetos práticos de Luiz Ricardo Favaro. **Nunca invente** tecnologias, experiências profissionais, empresas ou cargos não listados aqui.
 
 ---
 
-## 🛠️ Stacks Dominadas & Competências Práticas
+## 📌 Dados Pessoais & Contato
 
-### 💻 Linguagens & Runtimes
-- **TypeScript:** Tipagem estrita, generics, interfaces, Zod, ESM nativo.
-- **Node.js (v20+ / v22+):** APIs REST, streaming assíncrono, subprocessos, arquitetura orientada a eventos.
-- **JavaScript Moderno:** ES2023+, async/await, closures, promises concorrentes.
-- **Python (Intermediário):** Scripts utilitários, automação e manipulação de dados.
-
-### 🌐 Frontend & Frameworks
-- **Next.js (App Router / Pages Router):** React 18+, Server Components, Server Actions, SSR/SSG.
-- **React:** Hooks customizados, context API, componentização desacoplada.
-- **Tailwind CSS:** Layouts responsivos, glassmorphism, micro-interações.
-
-### 🗄️ Bancos de Dados & Armazenamento
-- **SQL / Relacional:** PostgreSQL, SQLite, modelagem relacional, joins, índices, migrações versionadas (Supabase / raw SQL).
-- **Vetorial & IA:** LanceDB (armazenamento vetorial local embutido, busca semântica por cosseno com EmbeddingGemma-2).
-
-### ⚙️ DevOps, Testes & Ferramentas
-- **Docker:** Criação de Dockerfiles multi-stage, Docker Compose, isolamento de ambientes e serviços locais.
-- **Testes Automatizados:** Testes unitários e de integração com Jest e Node.js Test Runner, mocks estruturados, validação de regras de negócio.
-- **Git & GitHub:** Git flow, Conventional Commits, Pull Requests, GitHub Actions (CI/CD), GitHub REST API / CLI (\`gh\`).
+- **Nome Completo:** Luiz Ricardo Favaro
+- **Título Base:** Engenheiro da Computação | Desenvolvedor de Software (Backend, Integrações & IA)
+- **Localização:** Guarujá, São Paulo (atuando em Santos, SP)
+- **E-mail:** ricardofavaro6@gmail.com
+- **Telefone / WhatsApp:** (13) 98174-8698
+- **LinkedIn:** https://www.linkedin.com/in/ri-favaro/
+- **GitHub:** https://github.com/ri-favaro
+- **Idiomas:**
+  - **Português:** Nativo
+  - **Inglês:** Avançado
+  - **Espanhol:** Intermediário
 
 ---
 
-## 🎓 Formação Acadêmica & Módulos MBA (USP/Esalq)
+## 🎯 Resumo Executivo & Posicionamento Estratégico
 
-### 1. Engenharia da Computação (Graduação Completa)
-- Fundamentos sólidos de computação: estruturas de dados, algoritmos, sistemas operacionais, redes de computadores, arquitetura de computadores e sistemas distribuídos.
-
-### 2. MBA em Engenharia de Software - USP / Esalq (Em Andamento)
-- **Clean Architecture & Hexagonal:** Separação estrita de entidades de domínio, use cases, adapters e frameworks.
-- **Domain-Driven Design (DDD):** Bounded contexts, agregados, value objects, domain events e entidades ricas.
-- **Mensageria & Filas:** Conceitos de pub/sub, mensageria assíncrona, filas e brokers (RabbitMQ, Kafka), concorrência e idempotência.
-- **Test-Driven Development (TDD):** Ciclo Red-Green-Refactor, pirâmide de testes e testes de regressão.
-- **Microsserviços & Resiliência:** Padrões de circuit breaker, retry, dead-letter queues e observabilidade.
+- **Formação Principal:** Bacharel em Engenharia da Computação — Universidade Santa Cecília (UNISANTA, concluído em 2024 com nota máxima no TCC e publicação na COBRICS).
+- **Pós-Graduação:** MBA em Engenharia de Software — USP/ESALQ (cursando).
+- **Atuação Profissional Atual:** Desenvolvedor de Integrações & Software na **Contele** (Santos, SP), com foco em **Node.js**, **TypeScript**, **Integrações de APIs REST**, **N8N**, **LLMs (Claude / Anthropic)** e desenvolvimento fullstack no ecossistema **CONTELE-OS** (Next.js, React, PostgreSQL/Supabase).
+- **Alvo Estratégico de Carreira:** Vagas de **Desenvolvedor / Engenheiro de Software Pleno (Mid-level)** (Backend, Integrações, Fullstack ou Engenharia de IA/Agentes).
+- **Regra de Posicionamento (Calibração Pleno):** Evitar termos de ancoragem júnior (como *"profissional em início de carreira buscando aprender"*). Posicionar como **Engenheiro de Software com entrega comprovada em produção** (automação ponta a ponta de APIs críticas, LLMs em produção, arquitetura limpa e sistemas distribuídos).
 
 ---
 
-## 🚀 Projetos Reais & Realizações Práticas
+## 💼 Experiência Profissional Real
 
-### 1. CONTELE-OS
-- **Papel:** Desenvolvedor Fullstack
-- **Stack:** Next.js, React, TypeScript, Supabase (PostgreSQL), Tailwind CSS, Jest.
-- **Realizações:**
-  - Desenvolvimento e manutenção de módulos para gestão de ordens de serviço e operações de telecomunicações.
-  - Implementação de regras de negócio complexas, fluxos de validação de formulários com Zod e persistência relacional.
-  - Otimização de interfaces para usuários de campo e operadores, garantindo baixa latência e alta usabilidade.
-  - Criação de testes unitários com Jest e automação de regras com migrações de banco seguras.
+### 1. Contele — Desenvolvedor de Integrações · Foco em IA e Automações
+- **Período:** abr/2026 – atual | **Local:** Santos, SP
+- **Stack em Produção:** Node.js, TypeScript, N8N, APIs REST, LLMs (Claude / Anthropic), Next.js, React, Supabase (PostgreSQL), Tailwind CSS, Zod, Jest, Git/GitHub.
+- **Realizações & Entregas Comprovadas:**
+  - Desenvolvimento e arquitetura de integrações e automações de processos críticos de negócio utilizando **Node.js**, **TypeScript** e **N8N**.
+  - Consumo e orquestração de APIs REST externas, destacando-se a **automação ponta a ponta do fluxo de postagem dos Correios** (pré-postagem, geração automatizada de etiquetas em PDF e dashboard de rastreamento em tempo real).
+  - Aplicação prática de **LLMs (incluindo Claude da Anthropic)** em fluxos produtivos de automação inteligente e triagem de dados.
+  - Contribuição fullstack na plataforma **CONTELE-OS**: desenvolvimento de módulos com **Next.js**, **React**, **TypeScript** e **Supabase (PostgreSQL)**, validação estrita de schemas com **Zod**, migrações SQL versionadas e testes unitários com **Jest**.
+  - Atuação em time ágil de desenvolvimento de produto utilizando metodologia **Kanban**, code reviews e Pull Requests estruturadas.
 
-### 2. Benito - Assistente Pessoal & Engenharia Cognitiva
-- **Papel:** Criador & Engenheiro Principal
-- **Stack:** Node.js 22+, TypeScript 5.8+, Vercel AI SDK, Ollama (Qwen 3.5 9B), LanceDB, grammY (Telegram), picocolors, Zod.
-- **Realizações:**
-  - Arquitetura de raciocínio desacoplado (Decoupled Reasoning) com streaming parser FSM (\`<thinking>\`) sem adicionar latência.
-  - Mecanismo RAG local de alta performance com LanceDB e EmbeddingGemma-2 768d (~270MB RAM), com indexação incremental via SHA-256.
-  - Runner de orquestração técnica com whitelist de comandos, controle de timeout e sandbox estrito (\`path-guard\`).
-  - Módulo financeiro em tempo real com snapshot O(1) (\`saldo-mestre.md\`) e sincronização atômica multi-carteiras.
+### 2. O Especialista — Suporte de TI & Infraestrutura
+- **Período:** jun/2024 – dez/2024 (6 meses) | **Local:** Guarujá, SP
+- **Realizações & Entregas Comprovadas:**
+  - Prestação de suporte técnico nível 1 e 2 (presencial e remoto) atendendo simultaneamente de **4 a 5 empresas clientes**.
+  - Diagnóstico e resolução de incidentes críticos de TI, configuração de redes, infraestrutura local e manutenção de hardware.
+  - Interface direta com stakeholders e usuários finais, desenvolvendo comunicação clara sob pressão, senso de urgência e foco em SLA/resolução efetiva de problemas.
 
 ---
 
-## 🎯 Diretrizes para Adaptação de Currículo
+## 🛠️ Habilidades Técnicas & Stacks Dominadas
 
-1. **Nunca inventar fatos:** Basear cada bullet point em realizações e competências reais comprováveis.
-2. **Reorganização Estratégica:** Realçar projetos e módulos acadêmicos que diretamente resolvem as dores da vaga.
-3. **Calibração Pleno:** Destacar autonomia técnica, clareza arquitetural, domínio de TypeScript/Node.js/SQL e capacidade de aprendizado acelerado.
+### 💻 Linguagens de Programação
+- **Principais (Foco Software & IA):** TypeScript, JavaScript (ES2023+ / Node.js), Python, SQL.
+- **Sistemas, Tipadas & Embarcados (Background Engenharia):** Go (Golang), C#, C, C++.
+- **Secundárias / Acadêmicas (Omitir em vagas puras de Web/Backend, usar apenas se a vaga pedir IoT/Automação Industrial):** Assembly, Ladder (CLPs), HTML5, CSS3.
+
+### 🌐 Backend, Integrações & Frontend
+- **Backend & Runtimes:** Node.js (v20+ / v22+, ESM nativo), APIs RESTful (design, autenticação, consumo, webhooks, geração de PDFs), Express, validação estrita com Zod.
+- **Automações & Workflows:** N8N (fluxos complexos, webhooks, integrações com IA e sistemas externos).
+- **Frontend & Web:** React, Next.js (App Router, Server Components, Server Actions), Tailwind CSS.
+
+### 🤖 Inteligência Artificial, LLMs & Dados Vetoriais
+- **Engenharia de IA & Agentes:** Integração produtiva com APIs de LLMs (Anthropic Claude, Google Gemini, OpenAI) e modelos locais via Ollama (Qwen 3.5) e \`llama-server\`.
+- **Orquestração & SDKs:** Vercel AI SDK, Tool Calling, Streaming Parsers (FSM), Decoupled Reasoning (\`<thinking>\`), Agentes Autônomos e N8N AI Agents.
+- **RAG & Bancos Vetoriais:** LanceDB (busca semântica vetorial local), EmbeddingGemma-2 (768d), chunking estrutural e indexação incremental com hash SHA-256.
+
+### 🗄️ Bancos de Dados, Cloud & DevOps
+- **Bancos de Dados:** PostgreSQL (Supabase, modelagem relacional, índices, joins, migrations SQL), MySQL, SQLite, Firebase (Realtime Database).
+- **DevOps, Cloud & Ferramentas:** Docker (Dockerfile multi-stage, Docker Compose), Git, GitHub (GitHub Actions, CLI \`gh\`, REST API), Microsoft Azure (VMs e processamento em nuvem), Linux (servidor e embarcado).
+- **Qualidade & Engenharia:** Testes unitários e de integração (Jest, Node.js Test Runner), Clean Architecture, Domain-Driven Design (DDD), TDD, Kanban.
+
+---
+
+## 🚀 Projetos de Engenharia & Pesquisa Aplicada
+
+### 1. Benito — Assistente Pessoal Autônomo & Engenharia Cognitiva (2026)
+- **Repositório:** \`https://github.com/ri-favaro/BenitoAgentePessoal\`
+- **Stack:** Node.js 22+, TypeScript 5.8+, Vercel AI SDK, Ollama (Qwen 3.5 9B), LanceDB, EmbeddingGemma-2, grammY (Telegram Bot), Zod.
+- **Destaques para o CV:**
+  - Arquitetura cognitiva de raciocínio desacoplado (*Decoupled Reasoning*) com parser FSM em streaming (\`<thinking>\`) sem adição de latência.
+  - Motor de RAG local multi-repositório com **LanceDB** e **EmbeddingGemma-2 (768d)** otimizado (~270MB RAM) e indexação incremental por hash SHA-256.
+  - Orquestrador técnico hierárquico capaz de empacotar contexto de issues do GitHub e delegar codificação autônoma via CLI com sandbox estrito de segurança (\`path-guard\`) e whitelist de processos.
+  - Cobertura de 13 suítes de testes automatizados validando regras financeiras em tempo real ($O(1)$), integrações GitHub REST/CLI, busca web (Tavily/Jina Reader) e automação via cron.
+
+### 2. TCC Premiado & Publicado na COBRICS (Jan – Dez 2024)
+- **Título:** *Aprendizado e Diversão: Uma abordagem tecnológica com jogos lúdico-musicais na infância*
+- **Stack:** C/C++ (ESP32), Sensores RFID, Firebase, Android, Prototipagem Eletrônica.
+- **Destaques para o CV:**
+  - Arquitetura ponta a ponta integrando hardware embarcado (**ESP32** + **RFID**), sincronização em nuvem em tempo real (**Firebase**) e aplicativo móvel (**Android**).
+  - Validado em campo com crianças (4 a 8 anos) e pedagogos; obteve **nota máxima (10)** na banca de Engenharia da Computação e **artigo científico publicado no congresso COBRICS 2024**.
+
+### 3. RMDA — Robô de Monitoramento de Ambientes em Nuvem (Jan – Jul 2023)
+- **Repositório:** \`https://github.com/ri-favaro/Projeto-IOT-23\`
+- **Stack:** Microsoft Azure (VM), LoRaWAN, The Things Network (TTN), IoT, Dashboard Gráfico.
+- **Destaques para o CV:**
+  - Prova de conceito de telemetria distribuída com transmissão de dados de longo alcance via **LoRaWAN/TTN** para servidor e processamento em **VM Microsoft Azure** com dashboard gráfico em tempo real.
+
+### 4. Sistema Operacional Linux Customizado com Buildroot (2023)
+- **Repositório:** \`https://github.com/ri-favaro/Primeiro-sistema-operacional-proprio\`
+- **Stack:** Linux Embarcado, Buildroot, Shell Script, Raspberry Pi 4.
+- **Destaques para o CV:**
+  - Compilação e otimização de imagem de Sistema Operacional Linux enxuto do zero utilizando **Buildroot** e **Shell Script** para execução dedicada em hardware Raspberry Pi 4.
+
+### 5. Algoritmo Widrow-Hoff — Machine Learning Supervisionado (Ago – Out 2023)
+- **Repositório:** \`https://github.com/ri-favaro/Algoritmo-baseado-no-m-todo-WidrowHoff---HTML\`
+- **Stack:** JavaScript, HTML5, CSS3, Machine Learning Clássico.
+- **Destaques para o CV:**
+  - Implementação interativa do algoritmo de aprendizado supervisionado Widrow-Hoff (LMS) com visualização matemática de convergência em tempo real no navegador.
+
+---
+
+## 🎓 Formação Acadêmica
+
+### 1. MBA em Engenharia de Software — USP / ESALQ (Cursando)
+- **Foco:** Arquitetura de Software (Clean Architecture, Hexagonal), Domain-Driven Design (DDD), Microsserviços, Mensageria Assíncrona (RabbitMQ, Kafka), Test-Driven Development (TDD), DevOps & CI/CD.
+
+### 2. Bacharelado em Engenharia da Computação — Universidade Santa Cecília (UNISANTA) (Completo em Dez/2024)
+- **Foco:** Estruturas de Dados, Algoritmos, Sistemas Operacionais, Redes de Computadores, Sistemas Distribuídos, Engenharia de Software e Sistemas Embarcados.
+- **Destaque Acadêmico:** Autor de artigo publicado na COBRICS 2024 e nota máxima no Trabalho de Conclusão de Curso.
+
+---
+
+## 🎯 Diretrizes Obrigatórias para Adaptação de Currículo (Regras para o Benito)
+
+1. **Zero Alucinação & Fidelidade Absoluta:** Use exclusivamente os dados de contato, empresas (\`Contele\`, \`O Especialista\`), projetos (\`Benito\`, \`TCC COBRICS\`, \`RMDA Azure\`, \`Linux Buildroot\`, \`Widrow-Hoff\`), formação (\`UNISANTA\`, \`MBA USP/ESALQ\`) e idiomas (\`Inglês Avançado\`, \`Espanhol Intermediário\`) deste documento.
+2. **Filtro de Relevância por Vaga (Fim do "Tiro de Escopeta"):**
+   - Para vagas de **Backend / Fullstack / IA**: destaque \`TypeScript\`, \`Node.js\`, \`PostgreSQL\`, \`SQL\`, \`APIs REST\`, \`Docker\`, \`Next.js\`, \`React\`, \`N8N\`, \`LLMs (Claude/Ollama)\`, \`RAG/LanceDB\`, \`Jest\` e \`Azure\`. **Omita** ferramentas de automação industrial/CAD (\`AutoCAD\`, \`Fusion360\`, \`Ladder CLPs\`, \`Excel\`, \`Packet Tracer\`) que poluem a leitura do recrutador de software.
+   - Inclua os projetos de **Benito (IA/Node/TS)** e **Contele (APIs/Correios/LLMs/CONTELE-OS)** sempre no topo de relevância.
+3. **Tom de Nível Pleno:** Nunca escreva *"Profissional em início de carreira buscando aprender"*. Posicione como *"Engenheiro da Computação e Desenvolvedor de Software (pós-graduando em Engenharia de Software pela USP/ESALQ) com experiência prática em produção no desenvolvimento de APIs REST, integrações complexas, aplicações Fullstack (Node.js/TypeScript/React) e soluções com IA Generativa/LLMs"*.
+4. **Destaque do Inglês Avançado:** Sempre inclua a seção de Idiomas destacando **Inglês Avançado**, que é um diferencial competitivo forte para vagas Pleno.
 `;
 
 /**
