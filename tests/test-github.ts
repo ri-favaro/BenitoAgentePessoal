@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { GitHubService, type GitHubIssueItem } from "../src/core/github-service.js";
+import {
+  GitHubService,
+  type GitHubIssueItem,
+  analyzeArchitecturalImpact,
+  summarizeDiffIntelligently,
+  buildPullRequestExecutiveSummary,
+} from "../src/core/github-service.js";
 import { createGitHubTools } from "../src/tools/github-tools.js";
 import { SelfAuditor } from "../src/core/self-auditor.js";
 
@@ -72,6 +78,133 @@ async function runGitHubTests() {
   ).length;
   assert.strictEqual(occurrencesPR, 1, "Não deve duplicar o rodapé do PR");
   console.log("✔ prepareIssuePayload e preparePullRequestPayload validados com sucesso!");
+
+  // ==========================================
+  // 1.1 Testando Análise de Impacto Arquitetural e Riscos
+  // ==========================================
+  console.log("\n1.1 Testando analyzeArchitecturalImpact, summarizeDiffIntelligently e buildPullRequestExecutiveSummary...");
+
+  // Cenário A: Risco Baixo (código com testes, sem quebra, sem SQL, sem .env)
+  const lowImpact = analyzeArchitecturalImpact({
+    title: "feat(core): adicionar utilitário puro",
+    body: "Adiciona helper utilitário de texto.",
+    additions: 40,
+    deletions: 5,
+    files: [
+      { path: "src/core/text-utils.ts", additions: 30, deletions: 0 },
+      { path: "tests/test-text-utils.ts", additions: 10, deletions: 5 },
+    ],
+  });
+  assert.strictEqual(lowImpact.riskLevel, "BAIXO");
+  assert.strictEqual(lowImpact.hasSqlMigrations, false);
+  assert.strictEqual(lowImpact.hasDependencyChanges, false);
+  assert.strictEqual(lowImpact.hasEnvChanges, false);
+  assert.strictEqual(lowImpact.hasBreakingChanges, false);
+  assert.strictEqual(lowImpact.hasTestsIncluded, true);
+
+  // Cenário B: Risco Crítico (Breaking Change por título ou commit)
+  const breakingImpact = analyzeArchitecturalImpact({
+    title: "feat!: reformular interface pública de agentes",
+    body: "BREAKING CHANGE: assinaturas modificadas.",
+    files: [{ path: "src/core/agent.ts", additions: 50, deletions: 50 }],
+  });
+  assert.strictEqual(breakingImpact.riskLevel, "CRÍTICO");
+  assert.strictEqual(breakingImpact.hasBreakingChanges, true);
+
+  // Cenário C: Risco Crítico (SQL Destrutivo com DROP TABLE)
+  const dropSqlImpact = analyzeArchitecturalImpact(
+    {
+      title: "refactor(db): migração de esquema",
+      files: [{ path: "supabase/migrations/20261014_drop.sql", additions: 10, deletions: 0 }],
+    },
+    "+ DROP TABLE IF EXISTS legacy_users CASCADE;"
+  );
+  assert.strictEqual(dropSqlImpact.riskLevel, "CRÍTICO");
+  assert.strictEqual(dropSqlImpact.hasSqlMigrations, true);
+  assert.strictEqual(dropSqlImpact.sqlDestructive, true);
+
+  // Cenário D: Risco Alto (Migração SQL não-destrutiva)
+  const normalSqlImpact = analyzeArchitecturalImpact(
+    {
+      title: "feat(db): nova tabela de histórico",
+      files: [{ path: "supabase/migrations/20261014_create.sql", additions: 25, deletions: 0 }],
+    },
+    "+ CREATE TABLE history_logs (id UUID PRIMARY KEY);"
+  );
+  assert.strictEqual(normalSqlImpact.riskLevel, "ALTO");
+  assert.strictEqual(normalSqlImpact.hasSqlMigrations, true);
+  assert.strictEqual(normalSqlImpact.sqlDestructive, false);
+
+  // Cenário E: Risco Médio (Dependências em package.json e Variáveis em .env)
+  const envDepImpact = analyzeArchitecturalImpact(
+    {
+      title: "chore: atualizar dependencias e template de env",
+      files: [
+        { path: "package.json", additions: 3, deletions: 0 },
+        { path: ".env.example", additions: 1, deletions: 0 },
+      ],
+    },
+    '+   "new-dep": "^2.1.0",\n+ NEW_SERVICE_TOKEN=xyz'
+  );
+  assert.strictEqual(envDepImpact.riskLevel, "MÉDIO");
+  assert.strictEqual(envDepImpact.hasDependencyChanges, true);
+  assert.strictEqual(envDepImpact.hasEnvChanges, true);
+  assert.ok(envDepImpact.dependencyDetails?.some((d) => d.includes("new-dep")));
+
+  // Cenário F: Risco Médio (Código sem arquivos de teste)
+  const noTestImpact = analyzeArchitecturalImpact({
+    title: "feat(tools): adicionar nova rotina sem testes",
+    additions: 120,
+    deletions: 10,
+    files: [{ path: "src/tools/untested-routine.ts", additions: 120, deletions: 10 }],
+  });
+  assert.strictEqual(noTestImpact.riskLevel, "MÉDIO");
+  assert.strictEqual(noTestImpact.hasTestsIncluded, false);
+
+  // Cenário G: summarizeDiffIntelligently (diff pequeno e diff grande com priorização)
+  const smallDiff = "diff --git a/test.ts b/test.ts\n+ console.log('ok');";
+  assert.strictEqual(summarizeDiffIntelligently(smallDiff), smallDiff);
+
+  const largeDiff = [
+    "diff --git a/supabase/migrations/01_init.sql b/supabase/migrations/01_init.sql\n+ CREATE TABLE users (id int);\n",
+    "diff --git a/package.json b/package.json\n+ \"zod\": \"^3.24.0\"\n",
+    "diff --git a/src/huge-file.ts b/src/huge-file.ts\n" + "+ linha repetida\n".repeat(600),
+  ].join("\n");
+  const condensedDiff = summarizeDiffIntelligently(largeDiff, 1000);
+  assert.ok(condensedDiff.length <= 1100, "Diff condensado deve respeitar o orçamento de caracteres");
+  assert.ok(condensedDiff.includes("migrations/01_init.sql"), "Deve priorizar arquivo SQL crítico");
+  assert.ok(condensedDiff.includes("package.json"), "Deve priorizar package.json");
+
+  // Cenário H: buildPullRequestExecutiveSummary (estrutura completa de seções)
+  const execSummary = buildPullRequestExecutiveSummary(
+    {
+      number: 16,
+      title: "feat(github): resumo executivo de PRs",
+      body: "## Contexto\nImplementa Issue #16 para análise de PRs.\n\n- Adiciona summarize_github_pr",
+      state: "OPEN",
+      author: "ri-favaro",
+      url: "https://github.com/ri-favaro/BenitoAgentePessoal/pull/16",
+      additions: 150,
+      deletions: 20,
+      changedFiles: 3,
+      files: [
+        { path: "src/core/github-service.ts", additions: 100, deletions: 10 },
+        { path: "src/tools/github-tools.ts", additions: 40, deletions: 5 },
+        { path: "tests/test-github.ts", additions: 10, deletions: 5 },
+      ],
+    },
+    lowImpact
+  );
+  assert.ok(execSummary.includes("## 📋 Resumo Executivo: PR #16"));
+  assert.ok(execSummary.includes("### 🎯 Propósito & Motivação"));
+  assert.ok(execSummary.includes("### 🔄 Principais Mudanças"));
+  assert.ok(execSummary.includes("### 📁 Arquivos Críticos & Áreas Afetadas"));
+  assert.ok(execSummary.includes("### ⚠️ Avaliação de Impacto Arquitetural & Riscos"));
+  assert.ok(execSummary.includes("### 📝 Notas de Release Sugeridas"));
+  assert.ok(execSummary.includes("Banco de Dados & Migrações"));
+  assert.ok(execSummary.includes("Dependências de Terceiros"));
+  assert.ok(execSummary.includes("Variáveis de Ambiente & Config"));
+  console.log("✔ analyzeArchitecturalImpact, summarizeDiffIntelligently e buildPullRequestExecutiveSummary validados com sucesso!");
 
   // ==========================================
   // 2. Testando listIssues com Mock / Simulação de Comportamento
@@ -203,6 +336,37 @@ async function runGitHubTests() {
         pullRequests: [],
       };
     }
+
+    async summarizePullRequest(prNumber: number, options: any) {
+      if (prNumber === 404) {
+        return { success: false, error: "Pull Request #404 não encontrado." };
+      }
+      return {
+        success: true,
+        prNumber,
+        title: "feat(orchestration): terminal runner",
+        url: `https://github.com/ri-favaro/BenitoAgentePessoal/pull/${prNumber}`,
+        state: "MERGED",
+        author: "ri-favaro",
+        stats: { additions: 100, deletions: 20, changedFiles: 5 },
+        architecturalImpact: {
+          riskLevel: "BAIXO",
+          hasSqlMigrations: false,
+          sqlFiles: [],
+          hasDependencyChanges: false,
+          dependencyFiles: [],
+          hasEnvChanges: false,
+          envFiles: [],
+          hasBreakingChanges: false,
+          breakingChangeReasons: [],
+          hasTestsIncluded: true,
+          testFiles: ["tests/test-orchestration.ts"],
+          riskReasons: ["Alterações com baixo risco arquitetural."],
+        },
+        summary: `## 📋 Resumo Executivo: PR #${prNumber} - feat(orchestration): terminal runner\n\n### 🎯 Propósito & Motivação\nImplementação do runner.\n\n### 🔄 Principais Mudanças\n- Commit inicial\n\n### 📁 Arquivos Críticos & Áreas Afetadas\n- src/terminal.ts\n\n### ⚠️ Avaliação de Impacto Arquitetural & Riscos\n- **Nível de Risco Consolidado**: 🟢 **BAIXO**\n- 🗄️ **Banco de Dados & Migrações**: Nenhuma migração SQL identificada.\n- 📦 **Dependências de Terceiros**: Nenhuma alteração em dependências externas.\n- 🔐 **Variáveis de Ambiente & Config**: Nenhuma alteração em arquivos de ambiente (.env).\n- 💥 **Quebras de Compatibilidade (Breaking Changes)**: Nenhuma quebra identificada.\n- 🧪 **Cobertura de Testes**: Testes inclusos/atualizados.`,
+        diffSummary: options.includeDiff ? "diff --git a/file.ts b/file.ts\n+ codigo" : undefined,
+      };
+    }
   }
 
   const mockService = new MockGitHubService();
@@ -210,7 +374,7 @@ async function runGitHubTests() {
   // ==========================================
   // 3. Testando Ferramentas do AI SDK
   // ==========================================
-  console.log("\n3. Testando ferramentas create_github_issue, list_github_issues, get_github_issue, create_github_pr, list_github_prs, get_github_pr, list_recent_commits e summarize_merged_prs...");
+  console.log("\n3. Testando ferramentas create_github_issue, list_github_issues, get_github_issue, create_github_pr, list_github_prs, get_github_pr, list_recent_commits, summarize_merged_prs e summarize_github_pr...");
   const tools = createGitHubTools(mockService as any);
 
   // 3.1 create_github_issue - Sucesso
@@ -326,6 +490,27 @@ async function runGitHubTests() {
   assert.ok(summaryRes.summary.includes("Resumo de Entregas"));
   console.log("✔ summarize_merged_prs executou com sucesso!");
 
+  // 3.13 summarize_github_pr - Sucesso
+  const prSummaryRes: any = await tools.summarize_github_pr.execute({
+    prNumber: 30,
+    includeDiff: true,
+  });
+  assert.strictEqual(prSummaryRes.success, true);
+  assert.strictEqual(prSummaryRes.prNumber, 30);
+  assert.strictEqual(prSummaryRes.riskLevel, "BAIXO");
+  assert.ok(prSummaryRes.summary.includes("Resumo Executivo"));
+  assert.ok(prSummaryRes.architecturalImpact !== undefined);
+  assert.ok(prSummaryRes.diffSummary?.includes("diff --git"));
+  console.log("✔ summarize_github_pr executou com sucesso!");
+
+  // 3.14 summarize_github_pr - Falha controlada (404)
+  const prSummaryFailRes: any = await tools.summarize_github_pr.execute({
+    prNumber: 404,
+  });
+  assert.strictEqual(prSummaryFailRes.success, false);
+  assert.ok(prSummaryFailRes.error.includes("não encontrado"));
+  console.log("✔ summarize_github_pr tratou erro graciosamente!");
+
   // ==========================================
   // 4. Testando Integração com SelfAuditor
   // ==========================================
@@ -348,6 +533,16 @@ async function runGitHubTests() {
       }
     } else {
       console.log(`⚠️ gh CLI retornou aviso (esperado se não houver internet/token): ${realResult.error}`);
+    }
+
+    // Teste real de summarizePullRequest (PR 33 que já existe e está mergeado)
+    const realPrSummary = await service.summarizePullRequest(33, { includeDiff: true });
+    if (realPrSummary.success) {
+      console.log(`✔ summarizePullRequest real executado com sucesso para PR #33!`);
+      assert.strictEqual(realPrSummary.prNumber, 33);
+      assert.ok(realPrSummary.summary?.includes("Resumo Executivo"));
+      assert.ok(realPrSummary.architecturalImpact !== undefined);
+      assert.strictEqual(realPrSummary.architecturalImpact?.hasBreakingChanges, false);
     }
   } catch (err: any) {
     console.log(`⚠️ Teste opcional de rede ignorado: ${err.message}`);

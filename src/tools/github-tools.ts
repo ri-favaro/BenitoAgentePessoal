@@ -500,5 +500,62 @@ export function createGitHubTools(gitHubService?: GitHubService) {
         }
       },
     }),
+
+    summarize_github_pr: tool({
+      description:
+        "Gera um resumo executivo estruturado e avaliação de impacto arquitetural de um Pull Request específico (aberto ou concluído), inspecionando título, corpo, commits, arquivos e diff. Analisa riscos, migrações SQL, dependências, variáveis de ambiente (.env) e breaking changes.",
+      parameters: z.object({
+        prNumber: z
+          .number()
+          .describe("Número identificador do Pull Request no GitHub (ex: 12, 16, 33)."),
+        repo: z
+          .string()
+          .optional()
+          .describe(
+            "Repositório alvo no formato 'owner/repo' (ex: 'ri-favaro/BenitoAgentePessoal' ou 'contele-os'). Se omitido, utiliza o repositório atual do projeto."
+          ),
+        includeDiff: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            "Se true, anexa o diff inteligente condensado das alterações mais críticas no retorno."
+          ),
+      }),
+      execute: async ({ prNumber, repo, includeDiff }) => {
+        try {
+          const result = await service.summarizePullRequest(prNumber, {
+            repo,
+            includeDiff,
+          });
+
+          if (result.success) {
+            return {
+              success: true,
+              prNumber: result.prNumber,
+              title: result.title,
+              url: result.url,
+              state: result.state,
+              author: result.author,
+              stats: result.stats,
+              riskLevel: result.architecturalImpact?.riskLevel,
+              architecturalImpact: result.architecturalImpact,
+              summary: result.summary,
+              diffSummary: result.diffSummary,
+            };
+          }
+
+          return {
+            success: false,
+            error: result.error,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: `Erro ao executar summarize_github_pr: ${error?.message || String(error)}`,
+          };
+        }
+      },
+    }),
   };
 }
