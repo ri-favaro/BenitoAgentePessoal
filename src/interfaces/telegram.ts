@@ -1,3 +1,4 @@
+import path from "node:path";
 import { Bot } from "grammy";
 import pc from "picocolors";
 import { PersonalAgent } from "../core/agent.js";
@@ -18,6 +19,7 @@ import {
   executeDailyNewsDigest,
 } from "../automation/index.js";
 import { createObsidianTools } from "../tools/obsidian-tools.js";
+import { createCareerTools, loadAnalyzedJobs } from "../tools/career-tools.js";
 
 async function main() {
   if (!config.telegram.botToken) {
@@ -37,6 +39,7 @@ async function main() {
     config.obsidian.dailyNotesDir,
     config.filesystem.allowedPaths
   );
+  const careerTools = createCareerTools(config.obsidian.vaultPath, config.filesystem.allowedPaths);
   const auditor = new SelfAuditor();
   const embeddingService = new EmbeddingService();
   const vectorStore = new VectorStore();
@@ -92,6 +95,7 @@ async function main() {
     await bot.api.setMyCommands([
       { command: "start", description: "Iniciar conversa com o Benito" },
       { command: "status", description: "Ver status do assistente e modelo ativo" },
+      { command: "carreira", description: "Ver gaps de mercado e vagas analisadas" },
       { command: "financas", description: "Ver resumo financeiro e saldo do mês" },
       { command: "auditar", description: "Executar auto-auditoria do sistema" },
       { command: "reindex", description: "Reindexar repositórios e notas do cofre" },
@@ -481,12 +485,57 @@ async function main() {
     }
   });
 
+  bot.command("carreira", async (ctx) => {
+    try {
+      const text = ctx.message?.text || "";
+      const args = text.replace(/^\/carreira(@\w+)?/i, "").trim().toLowerCase();
+
+      if (args === "vagas" || args === "listar") {
+        const jobs = await loadAnalyzedJobs(config.obsidian.vaultPath, config.filesystem.allowedPaths);
+        if (jobs.length === 0) {
+          await ctx.reply(
+            "💼 *Nenhuma vaga analisada encontrada ainda.*\n\nEnvie o link ou texto de uma vaga no chat para o Benito analisar!",
+            { parse_mode: "Markdown" }
+          );
+          return;
+        }
+
+        let msg = `💼 *Vagas Analisadas (${jobs.length}):*\n\n`;
+        for (const j of jobs) {
+          const icon = j.verdict === "Sim" ? "🟢" : j.verdict === "Com ressalvas" ? "🟡" : "🔴";
+          msg += `${icon} *${j.company}* - ${j.role}\n`;
+          msg += `• *Match:* ${j.matchScore}% | *Veredito:* ${j.verdict.toUpperCase()}\n`;
+          if (j.cvPath) {
+            msg += `• *CV Adaptado:* \`${path.basename(j.cvPath)}\`\n`;
+          }
+          msg += `_${j.verdictReason}_\n\n`;
+        }
+        await safeReply(ctx, msg, { parse_mode: "Markdown" });
+      } else {
+        await ctx.reply("📊 *Consolidando relatório de mercado e gaps de carreira...*", { parse_mode: "Markdown" });
+        const res: any = await (careerTools.generate_career_report as any).execute({ updateVaultNote: true });
+        if (!res.success) {
+          await ctx.reply(`❌ Erro ao gerar relatório: ${res.error}`);
+        } else if (res.totalJobsAnalyzed === 0 || res.totalJobs === 0) {
+          await ctx.reply(res.message || "Nenhuma vaga cadastrada ainda.");
+        } else {
+          await safeReply(ctx, res.reportMarkdown, { parse_mode: "Markdown" });
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await ctx.reply(`❌ Erro no comando de carreira: ${msg}`);
+    }
+  });
+
   bot.command("ajuda", async (ctx) => {
     const helpMsg =
       `📖 *Comandos Disponíveis:*\n\n` +
       `• /status - Ver status do assistente, modelo e busca\n` +
       `• /hoje - Ver a Daily Note do dia no Obsidian\n` +
       `• /tarefas - Listar tarefas e checkboxes abertas no cofre\n` +
+      `• /carreira - Ver gaps de mercado e matriz de estudos para Pleno\n` +
+      `• /carreira vagas - Listar vagas analisadas e status de CVs\n` +
       `• /digest - Gerar e receber o Daily News Digest agora\n` +
       `• /financas - Ver extrato financeiro e saldo do mês\n` +
       `• /auditar - Executar auto-auditoria técnica do projeto\n` +

@@ -11,6 +11,7 @@ import { VectorStore } from "./core/vector-store.js";
 import { GitHubService } from "./core/github-service.js";
 import { executeDailyNewsDigest } from "./automation/index.js";
 import { createObsidianTools } from "./tools/obsidian-tools.js";
+import { createCareerTools, loadAnalyzedJobs } from "./tools/career-tools.js";
 
 async function readInputWithPasteSupport(
   rl: readline.Interface,
@@ -56,6 +57,7 @@ async function main() {
     config.obsidian.dailyNotesDir,
     config.filesystem.allowedPaths
   );
+  const careerTools = createCareerTools(config.obsidian.vaultPath, config.filesystem.allowedPaths);
   const auditor = new SelfAuditor();
   const embeddingService = new EmbeddingService();
   const vectorStore = new VectorStore();
@@ -86,7 +88,7 @@ async function main() {
   console.log(pc.gray(`• Busca Web: `) + pc.blue(searchDesc));
   console.log(pc.gray(`• Embeddings: `) + pc.cyan(`${config.embedding.baseUrl} (${config.embedding.model})`));
   console.log(pc.gray("--------------------------------------------------"));
-  console.log(pc.dim("Comandos especiais: /hoje, /tarefas, /digest, /financas, /issues, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
+  console.log(pc.dim("Comandos especiais: /hoje, /tarefas, /carreira, /digest, /financas, /issues, /auditar, /reindex, /memoria, /regras, /aprendizados, /topicos, /consolidar, /limpar, /sair, /ajuda"));
   console.log("");
   while (true) {
     let userInput: string;
@@ -455,10 +457,59 @@ async function main() {
         continue;
       }
 
+      if (trimmed === "/carreira" || trimmed.startsWith("/carreira ")) {
+        const sub = trimmed.replace("/carreira", "").trim().toLowerCase();
+        if (sub === "vagas" || sub === "listar") {
+          console.log(pc.cyan("\n[💼 Consultando histórico de vagas analisadas no Obsidian...]"));
+          try {
+            const jobs = await loadAnalyzedJobs(config.obsidian.vaultPath, config.filesystem.allowedPaths);
+            if (jobs.length === 0) {
+              console.log(pc.yellow("\nNenhuma vaga analisada encontrada em Carreira/vagas-analisadas.json.\nPeça ao Benito para analisar uma vaga: 'Benito, analise esta vaga: <link ou texto>'.\n"));
+            } else {
+              console.log(pc.bold(pc.green(`\n=== 💼 VAGAS ANALISADAS (${jobs.length}) ===\n`)));
+              for (const j of jobs) {
+                const icon = j.verdict === "Sim" ? "🟢" : j.verdict === "Com ressalvas" ? "🟡" : "🔴";
+                console.log(`${icon} ${pc.bold(j.company)} - ${j.role} [${pc.cyan(`${j.matchScore}%`)} - ${pc.bold(j.verdict.toUpperCase())}]`);
+                if (j.url) console.log(pc.dim(`   URL: ${j.url}`));
+                if (j.cvPath) console.log(pc.magenta(`   CV:  ${j.cvPath}`));
+                console.log(pc.gray(`   ${j.verdictReason}`));
+                console.log("");
+              }
+              console.log(pc.cyan("========================================================\n"));
+            }
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.log(pc.red(`\n✖ Erro ao listar vagas: ${msg}\n`));
+          }
+        } else {
+          console.log(pc.cyan("\n[📊 Gerando Observatório de Mercado e Relatório de Gaps de Carreira...]"));
+          try {
+            const res: any = await (careerTools.generate_career_report as any).execute({ updateVaultNote: true });
+            if (!res.success) {
+              console.log(pc.red(`\n✖ Erro ao gerar relatório: ${res.error}\n`));
+            } else if (res.totalJobsAnalyzed === 0 || res.totalJobs === 0) {
+              console.log(pc.yellow(`\n${res.message || "Nenhuma vaga cadastrada ainda."}\n`));
+            } else {
+              console.log(pc.bold(pc.green("\n=== 📊 RELATÓRIO DE MERCADO & GAPS ===\n")));
+              console.log(res.reportMarkdown);
+              if (res.notePath) {
+                console.log(pc.cyan(`\n✔ Nota executiva atualizada no Obsidian: ${res.notePath}\n`));
+              }
+            }
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.log(pc.red(`\n✖ Erro ao gerar relatório de carreira: ${msg}\n`));
+          }
+        }
+        continue;
+      }
+
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
         console.log(pc.bold("  /hoje         ") + "- Exibe a Daily Note do dia no cofre do Obsidian");
         console.log(pc.bold("  /tarefas      ") + "- Lista tarefas e checkboxes pendentes (- [ ]) no cofre");
+        console.log(pc.bold("  /carreira     ") + "- Exibe o relatório de gaps de mercado e matriz de estudos");
+        console.log(pc.bold("  /carreira vagas") + "- Lista todas as vagas analisadas com scores e status");
         console.log(pc.bold("  /digest       ") + "- Gera e exibe o Daily News Digest de notícias agora");
         console.log(pc.bold("  /financas     ") + "- Exibe o extrato financeiro e saldo do mês no Obsidian");
         console.log(pc.bold("  /issues       ") + "- Lista as issues abertas no GitHub");
@@ -638,6 +689,21 @@ async function main() {
               : " (em execução com AGY CLI - aguarde...)";
             process.stdout.write(
               pc.dim(pc.magenta(`\n[🤖 Coding Agent: delegando issue #${num}${isDry}]\n${agentName}: `))
+            );
+          } else if (toolName === "analyze_job_posting") {
+            const comp = (args as { company?: string })?.company || "empresa";
+            const r = (args as { role?: string })?.role || "vaga";
+            process.stdout.write(
+              pc.dim(pc.cyan(`\n[💼 Carreira: analisando aderência para ${r} @ ${comp}]\n${agentName}: `))
+            );
+          } else if (toolName === "generate_tailored_application") {
+            const comp = (args as { company?: string })?.company || "empresa";
+            process.stdout.write(
+              pc.dim(pc.green(`\n[📄 Carreira: gerando currículo adaptado e pitch para ${comp}]\n${agentName}: `))
+            );
+          } else if (toolName === "generate_career_report") {
+            process.stdout.write(
+              pc.dim(pc.magenta(`\n[📊 Carreira: gerando observatório de mercado e matriz de gaps]\n${agentName}: `))
             );
           } else {
             process.stdout.write(

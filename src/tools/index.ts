@@ -8,6 +8,7 @@ import { createRetrievalTools } from "./retrieval-tools.js";
 import { createAuditTools } from "./audit-tools.js";
 import { createGitHubTools } from "./github-tools.js";
 import { createObsidianTools } from "./obsidian-tools.js";
+import { createCareerTools } from "./career-tools.js";
 import { createOrchestrationTools } from "./orchestration-tools.js";
 import { EmbeddingService } from "../core/embedding-service.js";
 import { VectorStore } from "../core/vector-store.js";
@@ -64,6 +65,7 @@ export function getAgentTools(
       config.obsidian.dailyNotesDir,
       config.filesystem.allowedPaths
     ),
+    ...createCareerTools(config.obsidian.vaultPath, config.filesystem.allowedPaths),
     ...createRetrievalTools(
       vectorStore,
       embeddingService,
