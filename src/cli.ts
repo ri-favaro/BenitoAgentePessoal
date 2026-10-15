@@ -622,8 +622,9 @@ async function main() {
           } else if (toolName === "execute_workspace_command") {
             const cmd = (args as { command?: string })?.command || "";
             const cmdArgs = ((args as { args?: string[] })?.args || []).join(" ");
+            const fullCmd = `${cmd} ${cmdArgs}`.trim();
             process.stdout.write(
-              pc.dim(pc.yellow(`\n[⚡ Workspace: executando "${cmd} ${cmdArgs}".trim()]\n${agentName}: `))
+              pc.dim(pc.yellow(`\n[⚡ Workspace: executando "${fullCmd}"]\n${agentName}: `))
             );
           } else if (toolName === "prepare_coding_task") {
             const num = (args as { issueNumber?: number })?.issueNumber || "";

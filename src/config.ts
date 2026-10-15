@@ -163,7 +163,7 @@ export const config: AppConfig = {
   orchestration: {
     agyBinPath: process.env.AGY_BIN_PATH || "agy",
     allowedCommands: (
-      process.env.ORCHESTRATION_ALLOWED_COMMANDS || "agy,npm,npx,git,node"
+      process.env.ORCHESTRATION_ALLOWED_COMMANDS || "agy,npm,npx,git,node,gh"
     )
       .split(",")
       .map((c) => c.trim())
