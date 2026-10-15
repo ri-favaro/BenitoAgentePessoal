@@ -194,7 +194,20 @@ async function runRetrievalTests() {
     assert.strictEqual(mdChunks[0].heading, "Titulo da Nota");
     assert.strictEqual(mdChunks[1].heading, "Secao 1");
     assert.strictEqual(mdChunks[2].heading, "Secao 2");
-    console.log("✔ Algoritmos de chunking validados com precisão!");
+
+    // Chunking de PDF
+    const pdfLines = Array.from({ length: 120 }, (_, i) => `Linha do documento técnico ${i + 1}`).join("\n");
+    const pdfChunks = indexer.chunkCodeFile({
+      filePath: "G:/MBA-EngSoftware/resumo.pdf",
+      relativePath: "MBA-EngSoftware/resumo.pdf",
+      projectName: "MBA-EngSoftware",
+      content: pdfLines,
+      hash: "hash-pdf-1",
+    });
+    assert.ok(pdfChunks.length >= 2, "PDF longo deve ser fragmentado em múltiplos chunks");
+    assert.strictEqual(pdfChunks[0].language, "pdf");
+    assert.strictEqual(pdfChunks[0].project, "MBA-EngSoftware");
+    console.log("✔ Algoritmos de chunking (Código, Markdown e PDF) validados com precisão!");
 
     // ==========================================
     // 5. Testes das Tools com Trava de Sandbox

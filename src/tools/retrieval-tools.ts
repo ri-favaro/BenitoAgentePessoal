@@ -16,7 +16,7 @@ export function createRetrievalTools(
   return {
     search_codebase: tool({
       description:
-        "Busca semântica vetorial em arquivos de código em todos os repositórios autorizados (ex: Benito, CONTELE-OS). Localiza funções, classes, regras de negócio ou lógicas específicas em milissegundos sem precisar listar diretórios.",
+        "Busca semântica vetorial em arquivos de código, documentações, materiais didáticos e apostilas em todos os diretórios autorizados (ex: Benito, MBA-EngSoftware, CONTELE-OS). Use para localizar funções, regras de negócio, arquiteturas, anotações de estudo e documentos fora do cofre Obsidian em milissegundos.",
       parameters: z.object({
         query: z
           .string()

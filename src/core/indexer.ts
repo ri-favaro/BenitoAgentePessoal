@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+// @ts-ignore - Importa diretamente a lib para evitar bug do isDebugMode no index.js do pdf-parse em ESM
+import pdf from "pdf-parse/lib/pdf-parse.js";
 import { EmbeddingService } from "./embedding-service.js";
 import {
   VectorStore,
@@ -58,6 +60,7 @@ const SUPPORTED_CODE_EXTENSIONS = new Set([
   ".css",
   ".sh",
   ".ps1",
+  ".pdf",
 ]);
 
 export class KnowledgeIndexer {
@@ -113,15 +116,38 @@ export class KnowledgeIndexer {
           const relativePath = `${projectName}/${path.relative(resolvedDir, filePath).replace(/\\/g, "/")}`;
           scannedRelativePaths.add(relativePath);
 
+          const ext = path.extname(filePath).toLowerCase();
           let content: string;
-          try {
-            content = await fs.readFile(filePath, "utf-8");
-          } catch {
-            continue;
+
+          if (ext === ".pdf") {
+            try {
+              const stats = await fs.stat(filePath);
+              // Ignora PDFs vazios ou com mais de 30MB no disco
+              if (stats.size === 0 || stats.size > 30 * 1024 * 1024) {
+                filesSkipped++;
+                continue;
+              }
+              const buffer = await fs.readFile(filePath);
+              const pdfData = await pdf(buffer);
+              content = pdfData.text || "";
+            } catch (err) {
+              console.error(`[Indexer] Erro ao extrair texto do PDF '${filePath}':`, err);
+              filesSkipped++;
+              continue;
+            }
+          } else {
+            try {
+              content = await fs.readFile(filePath, "utf-8");
+            } catch {
+              continue;
+            }
           }
 
-          // Ignora arquivos vazios ou excessivamente grandes (> 150KB) que costumam ser bundles/dumps
-          if (!content.trim() || content.length > 150000) {
+          // Ignora arquivos vazios ou excessivamente grandes
+          // Para código/texto: limite de 150KB (evita bundles/dumps)
+          // Para PDFs: limite de 500.000 caracteres de texto extraído
+          const maxChars = ext === ".pdf" ? 500000 : 150000;
+          if (!content.trim() || content.length > maxChars) {
             filesSkipped++;
             continue;
           }
@@ -208,7 +234,7 @@ export class KnowledgeIndexer {
     try {
       const filePaths = await this.scanDirectory(resolvedVault, (f) => {
         const ext = path.extname(f).toLowerCase();
-        return ext === ".md" || ext === ".txt" || ext === ".canvas";
+        return ext === ".md" || ext === ".txt" || ext === ".canvas" || ext === ".pdf";
       });
 
       for (const filePath of filePaths) {
@@ -216,14 +242,37 @@ export class KnowledgeIndexer {
         const relativePath = path.relative(resolvedVault, filePath).replace(/\\/g, "/");
         scannedRelativePaths.add(relativePath);
 
+        const ext = path.extname(filePath).toLowerCase();
         let content: string;
-        try {
-          content = await fs.readFile(filePath, "utf-8");
-        } catch {
-          continue;
+
+        if (ext === ".pdf") {
+          try {
+            const stats = await fs.stat(filePath);
+            if (stats.size === 0 || stats.size > 30 * 1024 * 1024) {
+              filesSkipped++;
+              continue;
+            }
+            const buffer = await fs.readFile(filePath);
+            const pdfData = await pdf(buffer);
+            content = pdfData.text || "";
+          } catch (err) {
+            console.error(`[Indexer] Erro ao extrair texto do PDF no cofre '${filePath}':`, err);
+            filesSkipped++;
+            continue;
+          }
+        } else {
+          try {
+            content = await fs.readFile(filePath, "utf-8");
+          } catch {
+            continue;
+          }
         }
 
-        if (!content.trim()) continue;
+        const maxChars = ext === ".pdf" ? 500000 : 150000;
+        if (!content.trim() || content.length > maxChars) {
+          filesSkipped++;
+          continue;
+        }
 
         const hash = this.computeHash(content);
         if (storedHashes.get(relativePath) === hash) {

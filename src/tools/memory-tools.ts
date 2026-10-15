@@ -92,14 +92,14 @@ export function createMemoryTools(memoryManager: MemoryManager) {
 
     save_topic_learning: tool({
       description:
-        "Salva uma regra prática, heurística ou procedimento operacional diretamente dentro de um arquivo de tópico especializado em memory/topics/<slug>.md (ex: 'web-search', 'sports', 'coding'). NUNCA use para salvar dados factuais voláteis, notícias ou calendários (use apenas para heurísticas e procedimentos de como operar naquele domínio).",
+        "Salva uma regra prática, heurística ou procedimento operacional diretamente dentro de um arquivo de tópico especializado em memory/topics/<slug>.md (ex: 'web-search', 'sports', 'coding'). ATENÇÃO OBRIGATÓRIA (ZERO MEMÓRIA FÓSSIL): É TERMINANTEMENTE PROIBIDO usar esta ferramenta para arquivar resumos de busca web, artigos técnicos de terceiros, tutoriais ou notícias. Use EXCLUSIVAMENTE para registrar diretrizes de como o Benito deve agir e operar naquele domínio.",
       parameters: z.object({
         topicSlug: z
           .string()
           .describe("Slug do domínio/tópico em minúsculas sem espaços (ex: 'web-search', 'sports', 'coding')."),
         lesson: z
           .string()
-          .describe("A regra, procedimento ou heurística a ser registrada para este tópico específico."),
+          .describe("A regra de procedimento ou diretriz operacional do Benito (NUNCA resumos técnicos da web, fatos públicos ou tutoriais)."),
         title: z
           .string()
           .optional()
