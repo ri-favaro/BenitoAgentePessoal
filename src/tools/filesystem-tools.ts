@@ -72,6 +72,7 @@ export function createFilesystemTools(
             success: true,
             filePath: resolvedPath,
             content,
+            message: `Arquivo lido com sucesso: ${path.basename(resolvedPath)} (${content.length} caracteres).`,
           };
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);

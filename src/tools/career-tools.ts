@@ -158,6 +158,125 @@ export async function ensureCareerProfileExists(
 }
 
 /**
+ * Extrai metadados do cargo e empresa a partir do texto e cabeçalhos da vaga.
+ */
+export function extractJobMetadata(
+  text: string,
+  url?: string
+): { company?: string; role?: string } {
+  let company: string | undefined;
+  let role: string | undefined;
+
+  // 1. Título do LinkedIn: "Title: <Empresa> hiring <Cargo> in <Local> | LinkedIn"
+  const linkedinTitleMatch = text.match(/Title:\s*([^|\n\r]+?)\s+hiring\s+([^|\n\r]+?)\s+(?:in|em)\s+[^|\n\r]+/i);
+  if (linkedinTitleMatch) {
+    company = linkedinTitleMatch[1].trim();
+    role = linkedinTitleMatch[2].trim();
+  }
+
+  // 2. Formato alternativo de título: "Title: <Cargo> at <Empresa>" ou "Title: <Cargo> - <Empresa>"
+  if (!company || !role) {
+    const atMatch = text.match(/Title:\s*([^|\n\r]+?)\s+(?:at|na|no|@)\s+([^|\n\r]+?)(?:\s*\||\s*[-–—]|$)/im);
+    if (atMatch) {
+      role = atMatch[1].trim();
+      company = atMatch[2].trim();
+    }
+  }
+
+  if (!company || !role) {
+    const dashMatch = text.match(/Title:\s*([^|\n\r]+?)\s+[-–—]\s+([^|\n\r]+?)(?:\s*[-–—]|\s*\||$)/im);
+    if (dashMatch) {
+      role = dashMatch[1].trim();
+      company = dashMatch[2].trim();
+    }
+  }
+
+  // 3. Padrão no corpo do LinkedIn: "# <Cargo>" seguido de "#### [<Empresa>]" ou "[<Empresa>](https://...)"
+  if (!role) {
+    const h1Match = text.match(/^#\s+([^\n\r]+)/m);
+    if (h1Match && !h1Match[1].toLowerCase().includes("skip") && !h1Match[1].toLowerCase().includes("sign in")) {
+      role = h1Match[1].trim();
+    }
+  }
+
+  if (!company) {
+    const compMatch = text.match(/####\s*\[([^\]]+)\]/i) || text.match(/role at \*\*([^*]+)\*\*/i);
+    if (compMatch) {
+      company = compMatch[1].trim();
+    }
+  }
+
+  // 4. Se ainda não encontrou empresa ou cargo, analisa as primeiras linhas limpas do texto
+  if (!company || !role) {
+    const lines = text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("http") && !l.startsWith("[Skip"));
+
+    const noiseRegex = /^(?:sign in|join now|skip to|linkedin|expand search|clear text|apply|save|report this job|use ai to)/i;
+    const cleanLines = lines.filter((l) => !noiseRegex.test(l));
+
+    if (cleanLines.length >= 2) {
+      if (!role && cleanLines[0].length < 80) {
+        role = cleanLines[0].replace(/^#+\s*/, "").trim();
+      }
+      if (!company && cleanLines[1].length < 60) {
+        company = cleanLines[1].replace(/^[#\-\*]+\s*/, "").replace(/\[([^\]]+)\](?:\([^\)]+\))?/, "$1").trim();
+      }
+    }
+  }
+
+  // 5. Limpeza adicional se o cargo capturado contiver sufixos comuns
+  if (role) {
+    role = role.replace(/\s*\|\s*LinkedIn$/i, "").trim();
+  }
+  if (company) {
+    company = company.replace(/^(hiring|empresa)\s+/i, "").trim();
+  }
+
+  return { company, role };
+}
+
+/**
+ * Remove seções de rodapé (vagas recomendadas/similares) e modais repetitivos de login.
+ */
+export function cleanJobPostingContent(content: string, maxLength: number = 15000): string {
+  let cleaned = content;
+
+  // 1. Corte de seções irrelevantes de rodapé (Similar jobs, vagas relacionadas, etc.)
+  const cutoffPatterns = [
+    /\n\s*##?\s*Similar jobs/i,
+    /\n\s*##?\s*Vagas similares/i,
+    /\n\s*##?\s*Vagas semelhantes/i,
+    /\n\s*##?\s*Outras vagas/i,
+    /\n\s*##?\s*Explore similar jobs/i,
+    /\n\s*Similar jobs/i,
+    /\n\s*People also viewed/i,
+    /\n\s*Quem viu esta vaga também viu/i,
+    /\n\s*Get notified about new.*jobs/i,
+    /\n\s*Receba notificações de novas vagas/i,
+  ];
+
+  for (const pattern of cutoffPatterns) {
+    const match = cleaned.match(pattern);
+    if (match && match.index !== undefined) {
+      cleaned = cleaned.slice(0, match.index);
+    }
+  }
+
+  // 2. Remove modais repetitivos de login do LinkedIn
+  cleaned = cleaned.replace(/Join to apply for the[^\n]*role at[^\n]*/gi, "");
+  cleaned = cleaned.replace(/Sign in to access AI-powered advices[\s\S]*?Cookie Policy\.\)/gi, "");
+  cleaned = cleaned.replace(/Sign in to evaluate your skills[\s\S]*?Cookie Policy\.\)/gi, "");
+  cleaned = cleaned.replace(/Sign in to tailor your resume[\s\S]*?Cookie Policy\.\)/gi, "");
+  cleaned = cleaned.replace(/Continue with Google[\s\S]*?Cookie Policy\.\)/gi, "");
+  cleaned = cleaned.replace(/New to LinkedIn\? Join now/gi, "");
+
+  // 3. Aplica limpeza geral de markdown e limita tamanho sem perder a descrição
+  return cleanMarkdownContent(cleaned, maxLength);
+}
+
+/**
  * Busca conteúdo textual de uma URL de vaga (usando Jina Reader com fallback HTML).
  */
 export async function fetchJobPostingContent(url: string): Promise<string> {
@@ -178,9 +297,16 @@ export async function fetchJobPostingContent(url: string): Promise<string> {
     if (jinaRes.ok) {
       const text = await jinaRes.text();
       if (text && text.length > 200) {
+        // Preserva a linha Title: para extração precisa de empresa e cargo
+        let titleLine = "";
+        const titleMatch = text.match(/^(Title:[^\n\r]+)/m);
+        if (titleMatch) {
+          titleLine = titleMatch[1] + "\n\n";
+        }
+
         const contentStart = text.indexOf("Markdown Content:");
         const raw = contentStart !== -1 ? text.slice(contentStart + 17).trim() : text.trim();
-        return cleanMarkdownContent(raw, 7000);
+        return cleanJobPostingContent(titleLine + raw, 15000);
       }
     }
   } catch {
@@ -202,8 +328,8 @@ export async function fetchJobPostingContent(url: string): Promise<string> {
   }
 
   const html = await response.text();
-  const extracted = extractPageText(html, 7000);
-  return extracted.content;
+  const extracted = extractPageText(html, 15000);
+  return cleanJobPostingContent(extracted.content, 15000);
 }
 
 /**
@@ -275,24 +401,39 @@ export function evaluateJobMatch(
   keyTechnologies: string[];
 } {
   const lower = jobText.toLowerCase();
+  const lowerRole = roleName.toLowerCase();
 
-  // 1. Detecção de Nível
+  // 1. Detecção de Nível Calibrada
   let level: "junior" | "pleno" | "senior" | "outros" = "pleno";
-  if (/\b(senior|sênior|sr\.?|lead|tech lead|especialista|staff|principal)\b/i.test(roleName + " " + jobText)) {
+  if (/\b(senior|sênior|sr\.?|lead|tech lead|especialista|staff|principal)\b/i.test(lowerRole)) {
     level = "senior";
-  } else if (/\b(junior|júnior|jr\.?|estagio|estágio)\b/i.test(roleName + " " + jobText)) {
+  } else if (/\b(junior|júnior|jr\.?|estagio|estágio)\b/i.test(lowerRole)) {
     level = "junior";
+  } else if (/\b(pleno|mid|pl)\b/i.test(lowerRole)) {
+    level = "pleno";
+  } else {
+    // Se o cargo anunciado for genérico/neutro, analisa o corpo da vaga
+    const acceptsPleno = /pleno ou s[êe]nior|pleno\/s[êe]nior|mid-senior|nível pleno|pleno|mid-level/i.test(lower);
+    if (acceptsPleno) {
+      level = "pleno";
+    } else if (/\b(senior|sênior|lead|tech lead|staff|especialista)\b/i.test(lower)) {
+      level = "senior";
+    }
   }
 
   // 2. Mapeamento de Tecnologias Relevantes na Vaga
   const techCatalog: Record<string, RegExp> = {
     "TypeScript": /\b(typescript|ts)\b/i,
     "Node.js": /\b(node|nodejs|node\.js)\b/i,
-    "SQL / PostgreSQL": /\b(sql|postgres|postgresql|relational|rdbms)\b/i,
+    "SQL / PostgreSQL": /\b(sql|postgres|postgresql|relational|rdbms|pgvector)\b/i,
     "Docker": /\b(docker|container|containers|compose)\b/i,
     "Next.js": /\b(next\.js|nextjs|next)\b/i,
     "React": /\b(react|reactjs|react\.js)\b/i,
     "APIs REST": /\b(rest|restful|api|apis)\b/i,
+    "IA Generativa & LLMs": /\b(ia generativa|genai|llm|llms|engenharia de prompts?|prompt engineering|openai|anthropic|gemini|modelos de linguagem|modelos abertos)\b/i,
+    "Agentes de IA & Orquestração": /\b(agentes?|multiagente|multi-agent|orquestra[çc][ãa]o de agentes|langchain|langgraph|llamaindex|crewai|autogen|tool calling|chamada de ferramentas|harness)\b/i,
+    "Bases Vetoriais & RAG": /\b(rag|embeddings?|pgvector|lancedb|banco[s]? vetoria[il]|bases vetoriais|busca sem[âa]ntica|chunking|vector search)\b/i,
+    "Python": /\b(python|fastapi|django|flask)\b/i,
     "Clean Architecture": /\b(clean architecture|hexagonal|arquitetura limpa|camadas|ports and adapters)\b/i,
     "Domain-Driven Design (DDD)": /\b(ddd|domain-driven|domain driven)\b/i,
     "Mensageria (RabbitMQ / Kafka)": /\b(rabbitmq|kafka|mensageria|filas|queues|pub\/sub|sqs|event-driven)\b/i,
@@ -305,7 +446,6 @@ export function evaluateJobMatch(
     "NoSQL / MongoDB / Redis": /\b(nosql|mongo|mongodb|redis|dynamodb)\b/i,
     "Java / Spring Boot": /\b(java|spring|spring boot)\b/i,
     "C# / .NET": /\b(c#|\.net|dotnet|asp\.net)\b/i,
-    "Python": /\b(python|fastapi|django|flask)\b/i,
   };
 
   const detectedTechs: string[] = [];
@@ -327,7 +467,10 @@ export function evaluateJobMatch(
   if (detectedTechs.includes("Docker")) strengths.push("Docker (Conteinerização, multi-stage builds e compose)");
   if (detectedTechs.includes("Next.js") || detectedTechs.includes("React")) strengths.push("Next.js / React (Experiência prática no CONTELE-OS)");
   if (detectedTechs.includes("APIs REST")) strengths.push("APIs RESTful (Design limpo, boas práticas HTTP e contratos seguros)");
-  if (detectedTechs.includes("Python")) strengths.push("Python (Conhecimento prático para automações e integração)");
+  if (detectedTechs.includes("IA Generativa & LLMs")) strengths.push("IA Generativa & LLMs (Experiência prática no Benito com engenharia de prompts, Vercel AI SDK e Ollama)");
+  if (detectedTechs.includes("Agentes de IA & Orquestração")) strengths.push("Agentes de IA & Orquestração (Arquitetura cognitiva do Benito, tool calling, raciocínio desacoplado e automação)");
+  if (detectedTechs.includes("Bases Vetoriais & RAG")) strengths.push("Bases Vetoriais & RAG (Pipeline local de RAG no Benito com LanceDB, EmbeddingGemma-2 768d e indexação incremental)");
+  if (detectedTechs.includes("Python")) strengths.push("Python (Conhecimento prático para automações, APIs e scripts utilitários)");
 
   // Quick Wins (Base conceitual forte pelo MBA USP/Esalq + projetos)
   if (detectedTechs.includes("Clean Architecture")) quickWins.push("Clean Architecture (Módulo do MBA USP/Esalq e aplicação prática)");
@@ -340,23 +483,36 @@ export function evaluateJobMatch(
   if (detectedTechs.includes("GraphQL")) quickWins.push("GraphQL (Conceitos de schema-first e resolução de queries)");
 
   // Gaps Críticos (Exigências mandatórias fora do escopo Pleno atual)
-  const isSeniorRequirement =
-    lower.includes("5+ anos") ||
-    lower.includes("5 anos") ||
-    lower.includes("6+ anos") ||
-    lower.includes("8+ anos") ||
-    lower.includes("liderança técnica") ||
-    lower.includes("gestão de pessoas");
+  const isExclusiveSenior =
+    level === "senior" &&
+    !/pleno ou s[êe]nior|pleno\/s[êe]nior|mid-senior|pleno/i.test(lower) &&
+    (lower.includes("5+ anos") ||
+      lower.includes("6+ anos") ||
+      lower.includes("8+ anos") ||
+      lower.includes("liderança técnica") ||
+      lower.includes("gestão de pessoas"));
 
-  if (isSeniorRequirement && level === "senior") {
-    criticalGaps.push("Tempo de experiência formal exigido (vaga sênior/lead exigindo 5+ anos)");
+  if (isExclusiveSenior) {
+    criticalGaps.push("Tempo de experiência formal exigido (vaga sênior/lead exigindo 5+ anos exclusivos)");
   }
 
-  if (detectedTechs.includes("Java / Spring Boot") && !detectedTechs.includes("Node.js")) {
+  // Java só é gap se for o foco primário mandatório exclusivo sem suporte a Node/TS/Python
+  if (
+    detectedTechs.includes("Java / Spring Boot") &&
+    !detectedTechs.includes("Node.js") &&
+    !detectedTechs.includes("Python") &&
+    !detectedTechs.includes("TypeScript")
+  ) {
     criticalGaps.push("Foco primário mandatório em ecossistema Java/Spring Boot (fora da stack core)");
   }
 
-  if (detectedTechs.includes("C# / .NET") && !detectedTechs.includes("Node.js")) {
+  // C# / .NET só é gap se for mandatório e a vaga não for de Node/TS/Python
+  if (
+    detectedTechs.includes("C# / .NET") &&
+    !detectedTechs.includes("Node.js") &&
+    !detectedTechs.includes("Python") &&
+    !detectedTechs.includes("TypeScript")
+  ) {
     criticalGaps.push("Foco primário mandatório em ecossistema .NET / C#");
   }
 
@@ -376,8 +532,11 @@ export function evaluateJobMatch(
   // Penalização por gaps críticos
   score -= criticalGaps.length * 25;
 
-  // Bonificação se vaga menciona Node/TypeScript explicitamente
-  if (detectedTechs.includes("TypeScript") && detectedTechs.includes("Node.js")) {
+  // Bonificação se vaga menciona Node/TypeScript ou IA/Python explicitamente
+  if (
+    (detectedTechs.includes("TypeScript") && detectedTechs.includes("Node.js")) ||
+    (detectedTechs.includes("IA Generativa & LLMs") && detectedTechs.includes("Python"))
+  ) {
     score += 10;
   }
 
@@ -396,7 +555,7 @@ export function evaluateJobMatch(
     verdictReason = `Boa oportunidade de aplicação com posicionamento estratégico. Destaque seus projetos práticos (CONTELE-OS e Benito) e a formação teórica do MBA USP/Esalq para fechar os gaps pontuais (${quickWins.slice(0, 2).join(", ") || "conceituais"}).`;
   } else {
     verdict = "Sim";
-    verdictReason = `Excelente aderência para o nível Pleno! Seu domínio em TypeScript, Node.js, SQL e a base de arquitetura do MBA atendem aos requisitos essenciais da vaga.`;
+    verdictReason = `Excelente aderência para o nível Pleno! Seu domínio em engenharia de software, projetos práticos (CONTELE-OS e Benito) e a base do MBA USP/Esalq atendem aos requisitos essenciais da vaga.`;
   }
 
   return {
@@ -556,17 +715,30 @@ export function createCareerTools(
             }
           }
 
-          const evalResult = evaluateJobMatch(rawContent, company, role);
+          // Se a empresa ou cargo vierem com os valores default ou vazios, tenta extrair da página
+          let finalCompany = company;
+          let finalRole = role;
+          if (finalCompany === "Empresa" || finalRole === "Desenvolvedor Pleno" || !finalCompany || !finalRole) {
+            const extractedMeta = extractJobMetadata(rawContent, url);
+            if (extractedMeta.company && (finalCompany === "Empresa" || !finalCompany)) {
+              finalCompany = extractedMeta.company;
+            }
+            if (extractedMeta.role && (finalRole === "Desenvolvedor Pleno" || !finalRole)) {
+              finalRole = extractedMeta.role;
+            }
+          }
+
+          const evalResult = evaluateJobMatch(rawContent, finalCompany, finalRole);
           const dateStr = new Date().toISOString().slice(0, 10);
-          const slugCompany = company.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-          const slugRole = role.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+          const slugCompany = finalCompany.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+          const slugRole = finalRole.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
           const recordId = `${dateStr}-${slugCompany || "empresa"}-${slugRole || "pleno"}`;
 
           const record: AnalyzedJobRecord = {
             id: recordId,
             date: dateStr,
-            company,
-            role,
+            company: finalCompany,
+            role: finalRole,
             url,
             level: evalResult.level,
             matchScore: evalResult.matchScore,
@@ -581,7 +753,7 @@ export function createCareerTools(
           await saveAnalyzedJob(vaultPath, record, allowedPaths);
 
           const summaryMarkdown =
-            `### 🎯 Análise de Vaga: ${role} @ ${company}\n\n` +
+            `### 🎯 Análise de Vaga: ${finalRole} @ ${finalCompany}\n\n` +
             `• **Match Score:** **${evalResult.matchScore}%** (Nível: ${evalResult.level.toUpperCase()})\n` +
             `• **Veredito de Aplicação:** **${evalResult.verdict.toUpperCase()}**\n` +
             `• **Diagnóstico:** ${evalResult.verdictReason}\n\n` +
@@ -593,8 +765,8 @@ export function createCareerTools(
           return {
             success: true,
             jobId: recordId,
-            company,
-            role,
+            company: finalCompany,
+            role: finalRole,
             matchScore: evalResult.matchScore,
             verdict: evalResult.verdict,
             verdictReason: evalResult.verdictReason,
@@ -603,6 +775,7 @@ export function createCareerTools(
             criticalGaps: evalResult.criticalGaps,
             keyTechnologies: evalResult.keyTechnologies,
             summaryMarkdown,
+            message: `Vaga ${finalRole} @ ${finalCompany} analisada com sucesso: Veredito ${evalResult.verdict.toUpperCase()} (${evalResult.matchScore}% match). Registro salvo em Carreira/vagas-analisadas.json.`,
           };
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);

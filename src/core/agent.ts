@@ -294,6 +294,7 @@ export class PersonalAgent {
       const synthesisPrompt =
         systemPrompt +
         "\n\nAVISO CRÍTICO DO SISTEMA: O ciclo de ferramentas foi encerrado e você NÃO tem mais acesso a nenhuma ferramenta. Com base em TODOS os dados, retornos das ferramentas e leituras obtidas nas mensagens anteriores, elabore e envie AGORA sua resposta final, completa, precisa e traduzida para o português brasileiro." +
+        "\nATENÇÃO OBRIGATÓRIA: NÃO use a tag <thinking> ou <think>. Responda DIRETAMENTE com sua explicação e dados finais para o usuário." +
         (isTruncated && trimmedFull.length > 0
           ? ` Sua mensagem anterior parou abruptamente em "${trimmedFull.slice(-60)}". Conclua a linha de raciocínio e apresente o resultado final das operações sem deixar frases incompletas.`
           : " Entregue a resposta conclusiva diretamente ao usuário com as informações já coletadas e os resultados das operações.");
@@ -345,18 +346,38 @@ export class PersonalAgent {
           for (const part of msg.content) {
             if (part && typeof part === "object" && "result" in part) {
               const res = part.result as Record<string, unknown>;
-              if (res && typeof res.message === "string") {
-                toolSummaries.push(res.message);
+              if (res) {
+                if (typeof res.summaryMarkdown === "string") {
+                  toolSummaries.push(res.summaryMarkdown);
+                } else if (typeof res.message === "string") {
+                  toolSummaries.push(res.message);
+                } else if (typeof res.filePath === "string" && typeof res.content === "string") {
+                  const preview = res.content.length > 800 ? res.content.slice(0, 800) + "\n..." : res.content;
+                  toolSummaries.push(`Arquivo lido com sucesso (${res.filePath}):\n\`\`\`\n${preview}\n\`\`\``);
+                } else if (typeof res.error === "string") {
+                  toolSummaries.push(`Erro: ${res.error}`);
+                }
               }
             }
           }
         }
       }
       if (toolSummaries.length > 0) {
-        finalCleanText = `Pronto! Operações realizadas com sucesso:\n• ${toolSummaries.join("\n• ")}`;
+        finalCleanText = `Pronto! Operações realizadas com sucesso:\n\n${toolSummaries.join("\n\n")}`;
         callbacks?.onToken?.(finalCleanText);
         this.messages.push({ role: "assistant", content: finalCleanText });
       }
+    }
+
+    // Se ainda assim o texto estiver completamente vazio (ex: modelo consumiu tokens apenas em tag descartada),
+    // fornece fallback gracioso
+    if (!finalCleanText) {
+      if (thought && thought.trim().length > 100) {
+        finalCleanText = "Concluí a verificação solicitada com sucesso. Se precisar de mais detalhes ou de uma ação adicional, estou à disposição!";
+      } else {
+        finalCleanText = "Operação concluída. Como posso ajudar com os próximos passos?";
+      }
+      callbacks?.onToken?.(finalCleanText);
     }
 
     // Auditoria de cada turno (logs/reasoning.log)

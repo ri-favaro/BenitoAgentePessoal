@@ -9,6 +9,8 @@ import {
   buildConnectionPitch,
   buildTailoredResumeMarkdown,
   loadAnalyzedJobs,
+  extractJobMetadata,
+  cleanJobPostingContent,
 } from "../src/tools/career-tools.js";
 
 async function runCareerTests() {
@@ -83,7 +85,44 @@ async function runCareerTests() {
     assert.strictEqual(resC.verdict, "Não");
     assert.ok(resC.criticalGaps.length >= 1);
     assert.ok(resC.matchScore < 50);
-    console.log(pc.green("✔ Calibração de aderência e vereditos (Sim / Ressalvas / Não) validados com precisão!"));
+
+    // Cenário D: Vaga de IA Generativa, Agentes e RAG (Estilo Implanta / Benito)
+    const jobD = `
+      Title: Implanta hiring Desenvolvedor(a) Harness Multiagente in Brazil | LinkedIn
+
+      Procuramos uma pessoa desenvolvedora para apoiar a construção do Harness Multiagente, plataforma com agentes de IA.
+      Requisitos obrigatórios:
+      - Experiência sólida em Python e criação de APIs (FastAPI ou Flask).
+      - Experiência com LLMs em produção e engenharia de prompts.
+      - Conhecimento de RAG, embeddings, chunking e bases vetoriais com pgvector no PostgreSQL.
+      - Experiência com orquestração de agentes (LangChain, LangGraph, LlamaIndex ou similares).
+      - Microsserviços, Docker e testes automatizados.
+      - Experiência pleno ou sênior: engenharia de software e projetos com IA generativa.
+      Diferenciais:
+      - Orquestração multiagente, tool calling e observabilidade.
+
+      ## Similar jobs
+      - Desenvolvedor .NET Sênior na Empresa X (C#, .NET 8, 8+ anos)
+    `;
+
+    // Validação de corte de rodapé (Similar jobs com .NET)
+    const cleanedJobD = cleanJobPostingContent(jobD);
+    assert.ok(cleanedJobD.includes("Harness Multiagente"));
+    assert.ok(cleanedJobD.includes("LangGraph"));
+    assert.strictEqual(cleanedJobD.includes(".NET Sênior"), false); // Footer cortado!
+
+    // Validação de extração de metadados
+    const metaD = extractJobMetadata(jobD);
+    assert.strictEqual(metaD.company, "Implanta");
+    assert.strictEqual(metaD.role, "Desenvolvedor(a) Harness Multiagente");
+
+    // Validação de aderência para IA/Agentes
+    const resD = evaluateJobMatch(cleanedJobD, metaD.company, metaD.role);
+    assert.ok(resD.verdict === "Sim" || resD.verdict === "Com ressalvas");
+    assert.ok(resD.matchScore >= 75);
+    assert.ok(resD.strengths.some((s) => s.includes("IA Generativa") || s.includes("Agentes") || s.includes("RAG")));
+    assert.strictEqual(resD.criticalGaps.some((g) => g.includes(".NET")), false);
+    console.log(pc.green("✔ Calibração de aderência e vereditos (Sim / Ressalvas / Não) e corte de rodapé validados com precisão!"));
 
     // ==========================================
     // 3. Testando analyze_job_posting (Tool AI SDK & Persistência)
@@ -133,9 +172,21 @@ async function runCareerTests() {
       { messages: [], toolCallId: "call-3" }
     );
 
+    // Adiciona uma terceira vaga via auto-extração de metadados (sem passar company e role)
+    const analyzeRes4: any = await tools.analyze_job_posting.execute(
+      {
+        jobText: jobD,
+      },
+      { messages: [], toolCallId: "call-4" }
+    );
+    assert.strictEqual(analyzeRes4.success, true);
+    assert.strictEqual(analyzeRes4.company, "Implanta");
+    assert.strictEqual(analyzeRes4.role, "Desenvolvedor(a) Harness Multiagente");
+    assert.ok(analyzeRes4.matchScore >= 75);
+
     const storedJobs3 = await loadAnalyzedJobs(tempVaultDir, allowedDirs);
-    assert.strictEqual(storedJobs3.length, 2);
-    console.log(pc.green("✔ analyze_job_posting e persistência estruturada em vagas-analisadas.json validados!"));
+    assert.strictEqual(storedJobs3.length, 3);
+    console.log(pc.green("✔ analyze_job_posting, auto-extração e persistência estruturada em vagas-analisadas.json validados!"));
 
     // ==========================================
     // 4. Testando generate_tailored_application (CV & Pitch)
@@ -181,7 +232,7 @@ async function runCareerTests() {
     );
 
     assert.strictEqual(reportRes.success, true);
-    assert.strictEqual(reportRes.totalJobsAnalyzed, 2);
+    assert.strictEqual(reportRes.totalJobsAnalyzed, 3);
     assert.ok(reportRes.averageMatchScore > 0);
     assert.ok(reportRes.topSkills.length > 0);
     assert.ok(reportRes.studyMatrix.length > 0);
@@ -192,7 +243,7 @@ async function runCareerTests() {
     const noteContent = await fs.readFile(reportFilePath, "utf-8");
     assert.ok(noteContent.includes("Matriz de Estudos Priorizados"));
     assert.ok(noteContent.includes("Nubank") === false); // dados agregados
-    assert.ok(noteContent.includes("**Total de Vagas Analisadas:** 2"));
+    assert.ok(noteContent.includes("**Total de Vagas Analisadas:** 3"));
     console.log(pc.green("✔ generate_career_report consolidou mercado e gerou nota executiva perfeitamente!"));
 
     // ==========================================
