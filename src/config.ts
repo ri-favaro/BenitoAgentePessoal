@@ -168,7 +168,7 @@ export const config: AppConfig = {
       .split(",")
       .map((c) => c.trim())
       .filter(Boolean),
-    timeoutMs: Number(process.env.ORCHESTRATION_TIMEOUT_MS || 300000),
+    timeoutMs: Number(process.env.ORCHESTRATION_TIMEOUT_MS || 600000),
   },
 };
 

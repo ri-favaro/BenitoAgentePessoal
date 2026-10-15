@@ -140,6 +140,69 @@ async function runGitHubTests() {
         prNumber: 101,
       };
     }
+
+    async listPullRequests(options: any) {
+      return {
+        success: true,
+        pullRequests: [
+          {
+            number: 30,
+            title: "feat(orchestration): terminal runner",
+            body: "Descrição do PR",
+            state: "MERGED",
+            author: "ri-favaro",
+            url: "https://github.com/ri-favaro/BenitoAgentePessoal/pull/30",
+            additions: 100,
+            deletions: 20,
+            changedFiles: 5,
+          },
+        ],
+        totalFound: 1,
+      };
+    }
+
+    async getPullRequest(prNumber: number, options: any) {
+      if (prNumber === 404) {
+        return { success: false, error: "PR não encontrado." };
+      }
+      return {
+        success: true,
+        pullRequest: {
+          number: prNumber,
+          title: "feat(orchestration): terminal runner",
+          body: "Corpo do PR",
+          state: "MERGED",
+          author: "ri-favaro",
+          url: `https://github.com/ri-favaro/BenitoAgentePessoal/pull/${prNumber}`,
+        },
+        diff: "diff --git a/file.ts b/file.ts",
+      };
+    }
+
+    async listCommits(options: any) {
+      return {
+        success: true,
+        commits: [
+          {
+            hash: "abcdef123456",
+            shortHash: "abcdef1",
+            authorName: "Luiz Ricardo",
+            date: "2026-10-14",
+            message: "feat: commit de teste",
+          },
+        ],
+        totalFound: 1,
+      };
+    }
+
+    async summarizeMergedPullRequests(options: any) {
+      return {
+        success: true,
+        totalMerged: 1,
+        summary: "## 📊 Resumo de Entregas: 1 PR(s) Mergeado(s)",
+        pullRequests: [],
+      };
+    }
   }
 
   const mockService = new MockGitHubService();
@@ -147,7 +210,7 @@ async function runGitHubTests() {
   // ==========================================
   // 3. Testando Ferramentas do AI SDK
   // ==========================================
-  console.log("\n3. Testando ferramentas create_github_issue, list_github_issues, get_github_issue e create_github_pr...");
+  console.log("\n3. Testando ferramentas create_github_issue, list_github_issues, get_github_issue, create_github_pr, list_github_prs, get_github_pr, list_recent_commits e summarize_merged_prs...");
   const tools = createGitHubTools(mockService as any);
 
   // 3.1 create_github_issue - Sucesso
@@ -224,6 +287,44 @@ async function runGitHubTests() {
   assert.strictEqual(prFailRes.success, false);
   assert.ok(prFailRes.error.includes("Erro simulado"));
   console.log("✔ create_github_pr tratou erro graciosamente!");
+
+  // 3.9 list_github_prs - Sucesso
+  const listPrsRes: any = await tools.list_github_prs.execute({
+    state: "merged",
+    limit: 5,
+  });
+  assert.strictEqual(listPrsRes.success, true);
+  assert.strictEqual(listPrsRes.totalFound, 1);
+  assert.ok(listPrsRes.summary.includes("#30 [MERGED]"));
+  console.log("✔ list_github_prs executou com sucesso!");
+
+  // 3.10 get_github_pr - Sucesso
+  const getPrRes: any = await tools.get_github_pr.execute({
+    prNumber: 30,
+    includeDiff: true,
+  });
+  assert.strictEqual(getPrRes.success, true);
+  assert.strictEqual(getPrRes.pullRequest.number, 30);
+  assert.ok(getPrRes.diff.includes("diff --git"));
+  console.log("✔ get_github_pr executou com sucesso!");
+
+  // 3.11 list_recent_commits - Sucesso
+  const commitsRes: any = await tools.list_recent_commits.execute({
+    limit: 5,
+  });
+  assert.strictEqual(commitsRes.success, true);
+  assert.strictEqual(commitsRes.totalFound, 1);
+  assert.ok(commitsRes.summary.includes("[abcdef1]"));
+  console.log("✔ list_recent_commits executou com sucesso!");
+
+  // 3.12 summarize_merged_prs - Sucesso
+  const summaryRes: any = await tools.summarize_merged_prs.execute({
+    limit: 5,
+  });
+  assert.strictEqual(summaryRes.success, true);
+  assert.strictEqual(summaryRes.totalMerged, 1);
+  assert.ok(summaryRes.summary.includes("Resumo de Entregas"));
+  console.log("✔ summarize_merged_prs executou com sucesso!");
 
   // ==========================================
   // 4. Testando Integração com SelfAuditor

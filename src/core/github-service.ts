@@ -75,6 +75,142 @@ export interface PullRequestExecutionResult {
   error?: string;
 }
 
+export interface GitHubPullRequestFile {
+  path: string;
+  additions: number;
+  deletions: number;
+  changeType?: string;
+}
+
+export interface GitHubPullRequestItem {
+  number: number;
+  title: string;
+  body: string;
+  state: string;
+  mergedAt?: string;
+  closedAt?: string;
+  createdAt?: string;
+  url: string;
+  author: string;
+  headRefName?: string;
+  baseRefName?: string;
+  changedFiles?: number;
+  additions?: number;
+  deletions?: number;
+  files?: GitHubPullRequestFile[];
+}
+
+export interface ListPullRequestsOptions {
+  state?: "open" | "closed" | "merged" | "all";
+  limit?: number;
+  since?: string;
+  sinceHours?: number;
+  sinceDays?: number;
+  base?: string;
+  repo?: string;
+}
+
+export interface ListPullRequestsResult {
+  success: boolean;
+  pullRequests?: GitHubPullRequestItem[];
+  totalFound?: number;
+  error?: string;
+}
+
+export interface GetPullRequestResult {
+  success: boolean;
+  pullRequest?: GitHubPullRequestItem;
+  diff?: string;
+  error?: string;
+}
+
+export interface GitHubCommitItem {
+  hash: string;
+  shortHash: string;
+  authorName: string;
+  authorEmail?: string;
+  date: string;
+  message: string;
+}
+
+export interface ListCommitsOptions {
+  limit?: number;
+  since?: string;
+  sinceHours?: number;
+  sinceDays?: number;
+  author?: string;
+  path?: string;
+  repo?: string;
+}
+
+export interface ListCommitsResult {
+  success: boolean;
+  commits?: GitHubCommitItem[];
+  totalFound?: number;
+  error?: string;
+}
+
+export interface SummarizeMergedOptions extends ListPullRequestsOptions {
+  includeFileList?: boolean;
+}
+
+export interface SummarizeMergedResult {
+  success: boolean;
+  totalMerged: number;
+  summary: string;
+  pullRequests?: GitHubPullRequestItem[];
+  error?: string;
+}
+
+/**
+ * Converte expressao de tempo (horas, dias, 'today', 'yesterday', '24h', '7d', ISO date) em Date.
+ */
+export function parseSinceDate(
+  since?: string,
+  sinceHours?: number,
+  sinceDays?: number
+): Date | null {
+  if (typeof sinceHours === "number" && !isNaN(sinceHours) && sinceHours > 0) {
+    return new Date(Date.now() - sinceHours * 60 * 60 * 1000);
+  }
+  if (typeof sinceDays === "number" && !isNaN(sinceDays) && sinceDays > 0) {
+    return new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+  }
+  if (!since) return null;
+
+  const trimmed = since.trim().toLowerCase();
+  if (trimmed === "today" || trimmed === "hoje") {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (trimmed === "yesterday" || trimmed === "ontem") {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  const hoursMatch = trimmed.match(/^(\d+)\s*h(?:our|ora|s)?$/);
+  if (hoursMatch) {
+    const hours = parseInt(hoursMatch[1], 10);
+    return new Date(Date.now() - hours * 60 * 60 * 1000);
+  }
+
+  const daysMatch = trimmed.match(/^(\d+)\s*d(?:ay|ia|s)?$/);
+  if (daysMatch) {
+    const days = parseInt(daysMatch[1], 10);
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  }
+
+  const parsed = Date.parse(since);
+  if (!isNaN(parsed)) {
+    return new Date(parsed);
+  }
+
+  return null;
+}
+
 export class GitHubService {
   private projectRoot: string;
 
@@ -377,6 +513,416 @@ export class GitHubService {
         error: `Falha ao executar 'gh issue view #${issueNumber}': ${error?.message || String(error)}`,
       };
     }
+  }
+
+  /**
+   * Lista Pull Requests do repositório via CLI `gh pr list --json ...`.
+   * Suporta filtros por estado ('merged', 'open', 'closed', 'all') e período temporal.
+   */
+  async listPullRequests(options: ListPullRequestsOptions = {}): Promise<ListPullRequestsResult> {
+    try {
+      const state = options.state || "merged";
+      const limit = Math.min(Math.max(options.limit || 10, 1), 50);
+
+      const args = [
+        "pr",
+        "list",
+        "--state",
+        state,
+        "--limit",
+        String(limit),
+        "--json",
+        "number,title,body,state,mergedAt,closedAt,createdAt,url,author,headRefName,baseRefName,changedFiles,additions,deletions,files",
+      ];
+
+      if (options.base && options.base.trim()) {
+        args.push("--base", options.base.trim());
+      }
+
+      if (options.repo && options.repo.trim()) {
+        args.push("--repo", options.repo.trim());
+      }
+
+      const { stdout } = await execFileAsync("gh", args, {
+        cwd: this.projectRoot,
+        windowsHide: true,
+      });
+
+      const rawJson = stdout.trim();
+      if (!rawJson) {
+        return {
+          success: true,
+          pullRequests: [],
+          totalFound: 0,
+        };
+      }
+
+      const parsed: any[] = JSON.parse(rawJson);
+      const cutoffDate = parseSinceDate(options.since, options.sinceHours, options.sinceDays);
+
+      let pullRequests: GitHubPullRequestItem[] = parsed.map((item) => ({
+        number: item.number,
+        title: item.title,
+        body: item.body || "",
+        state: item.state,
+        mergedAt: item.mergedAt || undefined,
+        closedAt: item.closedAt || undefined,
+        createdAt: item.createdAt || undefined,
+        url: item.url,
+        author:
+          typeof item.author === "string"
+            ? item.author
+            : item.author?.login || item.author?.name || "desconhecido",
+        headRefName: item.headRefName,
+        baseRefName: item.baseRefName,
+        changedFiles: item.changedFiles,
+        additions: item.additions,
+        deletions: item.deletions,
+        files: Array.isArray(item.files)
+          ? item.files.map((f: any) => ({
+              path: f.path,
+              additions: f.additions ?? 0,
+              deletions: f.deletions ?? 0,
+              changeType: f.changeType,
+            }))
+          : undefined,
+      }));
+
+      if (cutoffDate) {
+        pullRequests = pullRequests.filter((pr) => {
+          const dateStr = pr.mergedAt || pr.closedAt || pr.createdAt;
+          if (!dateStr) return true;
+          return new Date(dateStr).getTime() >= cutoffDate.getTime();
+        });
+      }
+
+      return {
+        success: true,
+        pullRequests,
+        totalFound: pullRequests.length,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: `Falha ao executar 'gh pr list': ${error?.message || String(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Obtém detalhes completos de um Pull Request específico via CLI `gh pr view <number> --json ...`.
+   * Opcionalmente inclui o diff do PR se includeDiff for verdadeiro.
+   */
+  async getPullRequest(
+    prNumber: number,
+    options: { repo?: string; includeDiff?: boolean } = {}
+  ): Promise<GetPullRequestResult> {
+    try {
+      const args = [
+        "pr",
+        "view",
+        String(prNumber),
+        "--json",
+        "number,title,body,state,mergedAt,closedAt,createdAt,url,author,headRefName,baseRefName,changedFiles,additions,deletions,files",
+      ];
+
+      if (options.repo && options.repo.trim()) {
+        args.push("--repo", options.repo.trim());
+      }
+
+      const { stdout } = await execFileAsync("gh", args, {
+        cwd: this.projectRoot,
+        windowsHide: true,
+      });
+
+      const rawJson = stdout.trim();
+      if (!rawJson) {
+        return {
+          success: false,
+          error: `Pull Request #${prNumber} não encontrado ou vazio.`,
+        };
+      }
+
+      const parsed = JSON.parse(rawJson);
+      const pullRequest: GitHubPullRequestItem = {
+        number: parsed.number,
+        title: parsed.title,
+        body: parsed.body || "",
+        state: parsed.state,
+        mergedAt: parsed.mergedAt || undefined,
+        closedAt: parsed.closedAt || undefined,
+        createdAt: parsed.createdAt || undefined,
+        url: parsed.url,
+        author:
+          typeof parsed.author === "string"
+            ? parsed.author
+            : parsed.author?.login || parsed.author?.name || "desconhecido",
+        headRefName: parsed.headRefName,
+        baseRefName: parsed.baseRefName,
+        changedFiles: parsed.changedFiles,
+        additions: parsed.additions,
+        deletions: parsed.deletions,
+        files: Array.isArray(parsed.files)
+          ? parsed.files.map((f: any) => ({
+              path: f.path,
+              additions: f.additions ?? 0,
+              deletions: f.deletions ?? 0,
+              changeType: f.changeType,
+            }))
+          : undefined,
+      };
+
+      let diff: string | undefined;
+      if (options.includeDiff) {
+        try {
+          const diffArgs = ["pr", "diff", String(prNumber)];
+          if (options.repo && options.repo.trim()) {
+            diffArgs.push("--repo", options.repo.trim());
+          }
+
+          const { stdout: diffStdout } = await execFileAsync("gh", diffArgs, {
+            cwd: this.projectRoot,
+            windowsHide: true,
+          });
+
+          const fullDiff = diffStdout.trim();
+          diff =
+            fullDiff.length > 8000
+              ? `${fullDiff.slice(0, 8000)}\n\n[...diff truncado para economia de tokens...]`
+              : fullDiff;
+        } catch {
+          // Erro silencioso ao buscar diff opcional
+        }
+      }
+
+      return {
+        success: true,
+        pullRequest,
+        diff,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: `Falha ao executar 'gh pr view #${prNumber}': ${error?.message || String(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Lista commits recentes do repositório via `git log` local ou `gh api` para repo remoto.
+   * Suporta filtros por período temporal (since, sinceHours, sinceDays), autor, path e limite.
+   */
+  async listCommits(options: ListCommitsOptions = {}): Promise<ListCommitsResult> {
+    try {
+      const limit = Math.min(Math.max(options.limit || 10, 1), 100);
+      const cutoffDate = parseSinceDate(options.since, options.sinceHours, options.sinceDays);
+
+      // Se repositório remoto específico for fornecido, consulta via gh api
+      if (options.repo && options.repo.trim()) {
+        const repo = options.repo.trim();
+        let endpoint = `repos/${repo}/commits?per_page=${limit}`;
+        if (cutoffDate) {
+          endpoint += `&since=${cutoffDate.toISOString()}`;
+        }
+        if (options.author) {
+          endpoint += `&author=${encodeURIComponent(options.author)}`;
+        }
+        if (options.path) {
+          endpoint += `&path=${encodeURIComponent(options.path)}`;
+        }
+
+        const { stdout } = await execFileAsync("gh", ["api", endpoint], {
+          cwd: this.projectRoot,
+          windowsHide: true,
+        });
+
+        const rawJson = stdout.trim();
+        if (!rawJson) {
+          return { success: true, commits: [], totalFound: 0 };
+        }
+
+        const parsed: any[] = JSON.parse(rawJson);
+        const commits: GitHubCommitItem[] = parsed.map((item) => ({
+          hash: item.sha,
+          shortHash: (item.sha || "").slice(0, 7),
+          authorName: item.commit?.author?.name || item.author?.login || "desconhecido",
+          authorEmail: item.commit?.author?.email,
+          date: item.commit?.author?.date || item.commit?.committer?.date || "",
+          message: item.commit?.message?.split("\n")[0] || "",
+        }));
+
+        return {
+          success: true,
+          commits,
+          totalFound: commits.length,
+        };
+      }
+
+      // Repositório local padrão via git log
+      const gitArgs = [
+        "log",
+        `-n${limit}`,
+        "--pretty=format:%H%x1f%h%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e",
+      ];
+
+      if (cutoffDate) {
+        gitArgs.push(`--since=${cutoffDate.toISOString()}`);
+      }
+
+      if (options.author && options.author.trim()) {
+        gitArgs.push(`--author=${options.author.trim()}`);
+      }
+
+      if (options.path && options.path.trim()) {
+        gitArgs.push("--", options.path.trim());
+      }
+
+      const { stdout } = await execFileAsync("git", gitArgs, {
+        cwd: this.projectRoot,
+        windowsHide: true,
+      });
+
+      const trimmed = stdout.trim();
+      if (!trimmed) {
+        return { success: true, commits: [], totalFound: 0 };
+      }
+
+      const records = trimmed.split("\x1e").filter((r) => r.trim().length > 0);
+      const commits: GitHubCommitItem[] = records.map((rec) => {
+        const [hash, shortHash, authorName, authorEmail, date, message] = rec.trim().split("\x1f");
+        return {
+          hash: hash || "",
+          shortHash: shortHash || (hash ? hash.slice(0, 7) : ""),
+          authorName: authorName || "desconhecido",
+          authorEmail: authorEmail || undefined,
+          date: date || "",
+          message: message || "",
+        };
+      });
+
+      return {
+        success: true,
+        commits,
+        totalFound: commits.length,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: `Falha ao listar commits: ${error?.message || String(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Gera um resumo estruturado em linguagem natural (pt-br) sobre Pull Requests mergeados recentemente.
+   * Agrupa métricas de volume, destaques por PR, arquivos tocados e síntese de entregas.
+   */
+  async summarizeMergedPullRequests(
+    options: SummarizeMergedOptions = {}
+  ): Promise<SummarizeMergedResult> {
+    const listResult = await this.listPullRequests({
+      ...options,
+      state: "merged",
+    });
+
+    if (!listResult.success) {
+      return {
+        success: false,
+        totalMerged: 0,
+        summary: "",
+        error: listResult.error,
+      };
+    }
+
+    const prs = listResult.pullRequests || [];
+    if (prs.length === 0) {
+      let periodDesc = "no período selecionado";
+      if (options.sinceHours) periodDesc = `nas últimas ${options.sinceHours} horas`;
+      else if (options.sinceDays) periodDesc = `nos últimos ${options.sinceDays} dias`;
+      else if (options.since) periodDesc = `com o filtro '${options.since}'`;
+
+      return {
+        success: true,
+        totalMerged: 0,
+        pullRequests: [],
+        summary: `Nenhum Pull Request mergeado foi encontrado ${periodDesc}.`,
+      };
+    }
+
+    let totalAdditions = 0;
+    let totalDeletions = 0;
+    let totalFilesChanged = 0;
+
+    for (const pr of prs) {
+      totalAdditions += pr.additions || 0;
+      totalDeletions += pr.deletions || 0;
+      totalFilesChanged += pr.changedFiles || 0;
+    }
+
+    const lines: string[] = [];
+    lines.push(`## 📊 Resumo de Entregas: ${prs.length} PR(s) Mergeado(s)`);
+    lines.push(`- **Total de PRs**: ${prs.length}`);
+    lines.push(
+      `- **Impacto no Código**: +${totalAdditions} / -${totalDeletions} linhas alteradas em ~${totalFilesChanged} arquivos`
+    );
+    lines.push("");
+    lines.push("### 🚀 Detalhes das Entregas:");
+
+    for (const pr of prs) {
+      const mergeDate = pr.mergedAt
+        ? new Date(pr.mergedAt).toLocaleString("pt-BR")
+        : "Data indisponível";
+      lines.push(`\n#### [#${pr.number}] ${pr.title}`);
+      lines.push(`- **Autor**: @${pr.author} | **Mergeado em**: ${mergeDate}`);
+      lines.push(`- **URL**: ${pr.url}`);
+      lines.push(
+        `- **Estatísticas**: +${pr.additions || 0} / -${pr.deletions || 0} (${
+          pr.changedFiles || 0
+        } arquivos modificados)`
+      );
+
+      const cleanBody = (pr.body || "")
+        .replace(/>\s*\*Pull Request criado por Benito\.\*/g, "")
+        .trim();
+
+      if (cleanBody) {
+        const bodyLines = cleanBody.split("\n").map((l) => l.trim()).filter(Boolean);
+        const bulletPoints: string[] = [];
+        for (const line of bodyLines) {
+          if (line.startsWith("- ") || line.startsWith("* ")) {
+            bulletPoints.push(`  ${line}`);
+            if (bulletPoints.length >= 4) break;
+          }
+        }
+
+        if (bulletPoints.length > 0) {
+          lines.push("- **Principais alterações:**");
+          lines.push(...bulletPoints);
+        } else {
+          const preview = bodyLines.slice(0, 3).join(" ");
+          lines.push(
+            `- **Descrição**: ${preview.slice(0, 200)}${preview.length > 200 ? "..." : ""}`
+          );
+        }
+      }
+
+      if (options.includeFileList && pr.files && pr.files.length > 0) {
+        const fileNames = pr.files
+          .slice(0, 5)
+          .map((f) => `\`${f.path}\` (+${f.additions}/-${f.deletions})`)
+          .join(", ");
+        const extra = pr.files.length > 5 ? ` (+${pr.files.length - 5} outros)` : "";
+        lines.push(`- **Arquivos modificados**: ${fileNames}${extra}`);
+      }
+    }
+
+    const summary = lines.join("\n");
+    return {
+      success: true,
+      totalMerged: prs.length,
+      pullRequests: prs,
+      summary,
+    };
   }
 }
 

@@ -242,5 +242,263 @@ export function createGitHubTools(gitHubService?: GitHubService) {
         }
       },
     }),
+
+    list_github_prs: tool({
+      description:
+        "Lista Pull Requests do repositório via GitHub CLI (gh pr list). Permite filtrar por estado ('merged', 'open', 'closed', 'all') e por período temporal (sinceHours ou sinceDays).",
+      parameters: z.object({
+        state: z
+          .enum(["open", "closed", "merged", "all"])
+          .optional()
+          .default("merged")
+          .describe("Filtrar por estado do PR. Padrão: 'merged'."),
+        limit: z
+          .number()
+          .optional()
+          .default(10)
+          .describe("Quantidade máxima de PRs a retornar (1 a 50). Padrão: 10."),
+        sinceHours: z
+          .number()
+          .optional()
+          .describe("Filtrar PRs atualizados ou mergeados nas últimas X horas."),
+        sinceDays: z
+          .number()
+          .optional()
+          .describe("Filtrar PRs atualizados ou mergeados nos últimos X dias."),
+        base: z
+          .string()
+          .optional()
+          .describe("Filtrar pela branch de destino (ex: 'main')."),
+        repo: z
+          .string()
+          .optional()
+          .describe("Repositório opcional 'owner/repo'."),
+      }),
+      execute: async ({ state, limit, sinceHours, sinceDays, base, repo }) => {
+        try {
+          const result = await service.listPullRequests({
+            state,
+            limit,
+            sinceHours,
+            sinceDays,
+            base,
+            repo,
+          });
+
+          if (result.success) {
+            const prs = result.pullRequests || [];
+            const summary =
+              prs.length > 0
+                ? prs
+                    .map(
+                      (p) =>
+                        `#${p.number} [${p.state}] ${p.title} (@${p.author}) - ${p.url}`
+                    )
+                    .join("\n")
+                : "Nenhum Pull Request encontrado com os filtros informados.";
+
+            return {
+              success: true,
+              totalFound: result.totalFound ?? prs.length,
+              pullRequests: prs,
+              summary,
+            };
+          }
+
+          return {
+            success: false,
+            error: result.error,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: `Erro ao executar list_github_prs: ${error?.message || String(error)}`,
+          };
+        }
+      },
+    }),
+
+    get_github_pr: tool({
+      description:
+        "Obtém detalhes estruturados e arquivos modificados de um Pull Request específico via GitHub CLI (gh pr view). Opcionalmente inclui o diff das alterações.",
+      parameters: z.object({
+        prNumber: z
+          .number()
+          .describe("Número identificador do Pull Request no GitHub."),
+        includeDiff: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("Se true, inclui o diff unificado das alterações."),
+        repo: z
+          .string()
+          .optional()
+          .describe("Repositório opcional 'owner/repo'."),
+      }),
+      execute: async ({ prNumber, includeDiff, repo }) => {
+        try {
+          const result = await service.getPullRequest(prNumber, {
+            includeDiff,
+            repo,
+          });
+
+          if (result.success && result.pullRequest) {
+            return {
+              success: true,
+              pullRequest: result.pullRequest,
+              diff: result.diff,
+            };
+          }
+
+          return {
+            success: false,
+            error: result.error || `Pull Request #${prNumber} não encontrado.`,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: `Erro ao executar get_github_pr: ${error?.message || String(error)}`,
+          };
+        }
+      },
+    }),
+
+    list_recent_commits: tool({
+      description:
+        "Lista os commits recentes do repositório local ou remoto. Permite inspecionar hashes, autores, datas e mensagens para acompanhar o histórico de alterações.",
+      parameters: z.object({
+        limit: z
+          .number()
+          .optional()
+          .default(10)
+          .describe("Quantidade máxima de commits (1 a 100). Padrão: 10."),
+        sinceHours: z
+          .number()
+          .optional()
+          .describe("Filtrar commits das últimas X horas."),
+        sinceDays: z
+          .number()
+          .optional()
+          .describe("Filtrar commits dos últimos X dias."),
+        author: z
+          .string()
+          .optional()
+          .describe("Filtrar commits por nome ou email do autor."),
+        path: z
+          .string()
+          .optional()
+          .describe("Filtrar commits que alteraram determinado arquivo ou diretório."),
+        repo: z
+          .string()
+          .optional()
+          .describe("Repositório remoto opcional 'owner/repo'."),
+      }),
+      execute: async ({ limit, sinceHours, sinceDays, author, path, repo }) => {
+        try {
+          const result = await service.listCommits({
+            limit,
+            sinceHours,
+            sinceDays,
+            author,
+            path,
+            repo,
+          });
+
+          if (result.success) {
+            const commits = result.commits || [];
+            const summary =
+              commits.length > 0
+                ? commits
+                    .map(
+                      (c) =>
+                        `[${c.shortHash}] ${c.message} (${c.authorName}, ${c.date})`
+                    )
+                    .join("\n")
+                : "Nenhum commit encontrado no período informado.";
+
+            return {
+              success: true,
+              totalFound: result.totalFound ?? commits.length,
+              commits,
+              summary,
+            };
+          }
+
+          return {
+            success: false,
+            error: result.error,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: `Erro ao executar list_recent_commits: ${error?.message || String(error)}`,
+          };
+        }
+      },
+    }),
+
+    summarize_merged_prs: tool({
+      description:
+        "Gera um resumo executivo estruturado em linguagem natural (pt-br) sobre Pull Requests mergeados recentemente, incluindo métricas de linhas alteradas, destaques de cada PR e arquivos tocados.",
+      parameters: z.object({
+        limit: z
+          .number()
+          .optional()
+          .default(10)
+          .describe("Quantidade máxima de PRs mergeados a incluir no resumo."),
+        sinceHours: z
+          .number()
+          .optional()
+          .describe("Filtrar PRs mergeados nas últimas X horas."),
+        sinceDays: z
+          .number()
+          .optional()
+          .describe("Filtrar PRs mergeados nos últimos X dias."),
+        includeFileList: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe("Se true, lista arquivos modificados em cada PR."),
+        base: z
+          .string()
+          .optional()
+          .describe("Filtrar por branch de destino (ex: 'main')."),
+        repo: z
+          .string()
+          .optional()
+          .describe("Repositório opcional 'owner/repo'."),
+      }),
+      execute: async ({ limit, sinceHours, sinceDays, includeFileList, base, repo }) => {
+        try {
+          const result = await service.summarizeMergedPullRequests({
+            limit,
+            sinceHours,
+            sinceDays,
+            includeFileList,
+            base,
+            repo,
+          });
+
+          if (result.success) {
+            return {
+              success: true,
+              totalMerged: result.totalMerged,
+              summary: result.summary,
+              pullRequests: result.pullRequests,
+            };
+          }
+
+          return {
+            success: false,
+            error: result.error,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: `Erro ao executar summarize_merged_prs: ${error?.message || String(error)}`,
+          };
+        }
+      },
+    }),
   };
 }
