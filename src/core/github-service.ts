@@ -82,6 +82,21 @@ export interface GitHubPullRequestFile {
   changeType?: string;
 }
 
+export interface GitHubPullRequestCommit {
+  oid: string;
+  messageHeadline: string;
+  messageBody?: string;
+  authoredDate?: string;
+  authors?: Array<{ name?: string; email?: string; login?: string }>;
+}
+
+export interface GitHubPullRequestReview {
+  author?: { login?: string; name?: string };
+  state?: string;
+  submittedAt?: string;
+  body?: string;
+}
+
 export interface GitHubPullRequestItem {
   number: number;
   title: string;
@@ -98,6 +113,52 @@ export interface GitHubPullRequestItem {
   additions?: number;
   deletions?: number;
   files?: GitHubPullRequestFile[];
+  commits?: GitHubPullRequestCommit[];
+  reviews?: GitHubPullRequestReview[];
+}
+
+export type RiskLevel = "BAIXO" | "MÉDIO" | "ALTO" | "CRÍTICO";
+
+export interface ArchitecturalImpact {
+  hasSqlMigrations: boolean;
+  sqlFiles: string[];
+  sqlDestructive?: boolean;
+  hasDependencyChanges: boolean;
+  dependencyFiles: string[];
+  dependencyDetails?: string[];
+  hasEnvChanges: boolean;
+  envFiles: string[];
+  hasBreakingChanges: boolean;
+  breakingChangeReasons: string[];
+  hasTestsIncluded: boolean;
+  testFiles: string[];
+  riskLevel: RiskLevel;
+  riskReasons: string[];
+}
+
+export interface SummarizePullRequestOptions {
+  repo?: string;
+  includeDiff?: boolean;
+}
+
+export interface SummarizePullRequestResult {
+  success: boolean;
+  prNumber?: number;
+  title?: string;
+  url?: string;
+  state?: string;
+  author?: string;
+  headBranch?: string;
+  baseBranch?: string;
+  stats?: {
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+  };
+  architecturalImpact?: ArchitecturalImpact;
+  summary?: string;
+  diffSummary?: string;
+  error?: string;
 }
 
 export interface ListPullRequestsOptions {
@@ -623,7 +684,7 @@ export class GitHubService {
         "view",
         String(prNumber),
         "--json",
-        "number,title,body,state,mergedAt,closedAt,createdAt,url,author,headRefName,baseRefName,changedFiles,additions,deletions,files",
+        "number,title,body,state,mergedAt,closedAt,createdAt,url,author,headRefName,baseRefName,changedFiles,additions,deletions,files,commits,reviews",
       ];
 
       if (options.repo && options.repo.trim()) {
@@ -668,6 +729,23 @@ export class GitHubService {
               additions: f.additions ?? 0,
               deletions: f.deletions ?? 0,
               changeType: f.changeType,
+            }))
+          : undefined,
+        commits: Array.isArray(parsed.commits)
+          ? parsed.commits.map((c: any) => ({
+              oid: c.oid || "",
+              messageHeadline: c.messageHeadline || "",
+              messageBody: c.messageBody || undefined,
+              authoredDate: c.authoredDate || undefined,
+              authors: c.authors,
+            }))
+          : undefined,
+        reviews: Array.isArray(parsed.reviews)
+          ? parsed.reviews.map((r: any) => ({
+              author: r.author,
+              state: r.state,
+              submittedAt: r.submittedAt,
+              body: r.body,
             }))
           : undefined,
       };
@@ -924,5 +1002,757 @@ export class GitHubService {
       summary,
     };
   }
+
+  /**
+   * Analisa um Pull Request específico (aberto ou concluído), gerando resumo executivo estruturado
+   * em português, avaliação de impacto arquitetural (migrações SQL, dependências, .env, breaking changes)
+   * e notas de release automáticas.
+   */
+  async summarizePullRequest(
+    prNumber: number,
+    options: SummarizePullRequestOptions = {}
+  ): Promise<SummarizePullRequestResult> {
+    try {
+      const viewArgs = [
+        "pr",
+        "view",
+        String(prNumber),
+        "--json",
+        "number,title,body,state,mergedAt,closedAt,createdAt,url,author,headRefName,baseRefName,changedFiles,additions,deletions,files,commits,reviews",
+      ];
+
+      if (options.repo && options.repo.trim()) {
+        viewArgs.push("--repo", options.repo.trim());
+      }
+
+      const { stdout } = await execFileAsync("gh", viewArgs, {
+        cwd: this.projectRoot,
+        windowsHide: true,
+      });
+
+      const rawJson = stdout.trim();
+      if (!rawJson) {
+        return {
+          success: false,
+          error: `Pull Request #${prNumber} não encontrado ou retorno vazio do gh CLI.`,
+        };
+      }
+
+      const parsed = JSON.parse(rawJson);
+      const author =
+        typeof parsed.author === "string"
+          ? parsed.author
+          : parsed.author?.login || parsed.author?.name || "desconhecido";
+
+      const pullRequest: GitHubPullRequestItem = {
+        number: parsed.number,
+        title: parsed.title,
+        body: parsed.body || "",
+        state: parsed.state,
+        mergedAt: parsed.mergedAt || undefined,
+        closedAt: parsed.closedAt || undefined,
+        createdAt: parsed.createdAt || undefined,
+        url: parsed.url,
+        author,
+        headRefName: parsed.headRefName,
+        baseRefName: parsed.baseRefName,
+        changedFiles: parsed.changedFiles,
+        additions: parsed.additions,
+        deletions: parsed.deletions,
+        files: Array.isArray(parsed.files)
+          ? parsed.files.map((f: any) => ({
+              path: f.path,
+              additions: f.additions ?? 0,
+              deletions: f.deletions ?? 0,
+              changeType: f.changeType,
+            }))
+          : undefined,
+        commits: Array.isArray(parsed.commits)
+          ? parsed.commits.map((c: any) => ({
+              oid: c.oid || "",
+              messageHeadline: c.messageHeadline || "",
+              messageBody: c.messageBody || undefined,
+              authoredDate: c.authoredDate || undefined,
+              authors: c.authors,
+            }))
+          : undefined,
+        reviews: Array.isArray(parsed.reviews)
+          ? parsed.reviews.map((r: any) => ({
+              author: r.author,
+              state: r.state,
+              submittedAt: r.submittedAt,
+              body: r.body,
+            }))
+          : undefined,
+      };
+
+      // Busca o diff do PR para análise profunda de impacto e resumo inteligente
+      let diff = "";
+      try {
+        const diffArgs = ["pr", "diff", String(prNumber)];
+        if (options.repo && options.repo.trim()) {
+          diffArgs.push("--repo", options.repo.trim());
+        }
+
+        const { stdout: diffStdout } = await execFileAsync("gh", diffArgs, {
+          cwd: this.projectRoot,
+          windowsHide: true,
+          maxBuffer: 20 * 1024 * 1024,
+        });
+
+        diff = diffStdout || "";
+      } catch {
+        // Diff opcional ou vazio caso falhe
+      }
+
+      // Analisa o impacto arquitetural
+      const architecturalImpact = analyzeArchitecturalImpact(pullRequest, diff);
+
+      // Resumo inteligente do diff (sem truncamento excessivo)
+      const diffSummary = options.includeDiff ? summarizeDiffIntelligently(diff) : undefined;
+
+      // Constrói síntese executiva em linguagem natural (pt-br)
+      const summary = buildPullRequestExecutiveSummary(
+        pullRequest,
+        architecturalImpact,
+        diffSummary
+      );
+
+      return {
+        success: true,
+        prNumber: pullRequest.number,
+        title: pullRequest.title,
+        url: pullRequest.url,
+        state: pullRequest.state,
+        author: pullRequest.author,
+        headBranch: pullRequest.headRefName,
+        baseBranch: pullRequest.baseRefName,
+        stats: {
+          additions: pullRequest.additions ?? 0,
+          deletions: pullRequest.deletions ?? 0,
+          changedFiles: pullRequest.changedFiles ?? (pullRequest.files?.length || 0),
+        },
+        architecturalImpact,
+        summary,
+        diffSummary,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: `Falha ao executar resumo do Pull Request #${prNumber}: ${
+          error?.message || String(error)
+        }`,
+      };
+    }
+  }
+}
+
+/**
+ * Avalia o impacto arquitetural e riscos de um Pull Request com base em arquivos alterados,
+ * histórico de commits, títulos e diff unificado.
+ */
+export function analyzeArchitecturalImpact(
+  pr: {
+    title: string;
+    body?: string;
+    additions?: number;
+    deletions?: number;
+    files?: GitHubPullRequestFile[];
+    commits?: GitHubPullRequestCommit[];
+  },
+  diff?: string
+): ArchitecturalImpact {
+  const sqlFiles: string[] = [];
+  const dependencyFiles: string[] = [];
+  const envFiles: string[] = [];
+  const testFiles: string[] = [];
+  const codeFiles: string[] = [];
+  const dependencyDetails: string[] = [];
+  let sqlDestructive = false;
+
+  const files = pr.files || [];
+  for (const f of files) {
+    const p = f.path;
+    const lowerP = p.toLowerCase();
+
+    // SQL e Migrações de Banco de Dados
+    if (
+      lowerP.endsWith(".sql") ||
+      /(^|\/)(migrations?|prisma\/schema|database\/migrations?|supabase\/migrations?|drizzle\/migrations?)/i.test(
+        p
+      )
+    ) {
+      sqlFiles.push(p);
+    }
+
+    // Dependências de pacotes e manifestos de terceiros
+    if (
+      /(package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|requirements\.txt|poetry\.lock|Pipfile(\.lock)?|pyproject\.toml|Gemfile(\.lock)?|Cargo\.(toml|lock)|go\.(mod|sum))$/i.test(
+        p
+      )
+    ) {
+      dependencyFiles.push(p);
+    }
+
+    // Variáveis de ambiente e arquivos sensíveis de configuração
+    if (/(\.env(\.|$)|appsettings.*\.json|secrets?\.|wrangler\.toml)/i.test(p)) {
+      envFiles.push(p);
+    }
+
+    // Testes unitários e de integração
+    if (
+      /(^|\/)(tests?|__tests__|specs?)\/|(\.(test|spec)\.[a-z0-9]+$)/i.test(p)
+    ) {
+      testFiles.push(p);
+    } else if (
+      /\.(ts|tsx|js|jsx|py|go|rs|java|c|cpp|cs|php|rb|swift|kt)$/i.test(p)
+    ) {
+      codeFiles.push(p);
+    }
+  }
+
+  // Análise aprofundada do diff unificado (se fornecido)
+  if (diff) {
+    // Checagem de comandos SQL destrutivos
+    if (sqlFiles.length > 0) {
+      const dropRegex =
+        /^\+\s*(DROP\s+(TABLE|COLUMN|DATABASE|INDEX|VIEW|SCHEMA|TYPE|SEQUENCE)|TRUNCATE\s+(TABLE\s+)?[a-z0-9_]+|ALTER\s+TABLE\s+.*\s+DROP\s+)/im;
+      if (dropRegex.test(diff)) {
+        sqlDestructive = true;
+      }
+    }
+
+    // Extração precisa de pacotes novos ou alterados especificamente em package.json
+    if (dependencyFiles.some((f) => /(^|\/)package\.json$/i.test(f))) {
+      const fileBlocks = diff.split(/(?=^diff --git )/m);
+      const ignoredMetadataKeys = new Set([
+        "name",
+        "version",
+        "description",
+        "main",
+        "module",
+        "types",
+        "typings",
+        "type",
+        "exports",
+        "files",
+        "author",
+        "authors",
+        "license",
+        "licenses",
+        "repository",
+        "homepage",
+        "bugs",
+        "keywords",
+        "private",
+        "engines",
+        "packagemanager",
+        "bin",
+        "workspaces",
+        "publishconfig",
+        "scripts",
+        "config",
+      ]);
+      const isVersionSpec = (val: string) =>
+        /^[\^~>=<*]|\d+\.\d+|^(latest|beta|next|alpha|rc)|^(npm|workspace|catalog|file|git|github|http):/i.test(
+          val.trim()
+        );
+
+      for (const block of fileBlocks) {
+        const headerMatch = block.match(/^diff --git a\/(\S+) b\/(\S+)/m);
+        const filePath = headerMatch ? headerMatch[1] : "";
+        if (/(^|\/)package\.json$/i.test(filePath)) {
+          const depRegex =
+            /^\+\s*"(@?[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)?)"\s*:\s*"([^"]+)"/gim;
+          let match: RegExpExecArray | null;
+          while ((match = depRegex.exec(block)) !== null) {
+            const pkgName = match[1];
+            const pkgVer = match[2];
+            if (
+              !ignoredMetadataKeys.has(pkgName.toLowerCase()) &&
+              isVersionSpec(pkgVer)
+            ) {
+              const entry = `${pkgName} (${pkgVer})`;
+              if (!dependencyDetails.includes(entry)) {
+                dependencyDetails.push(entry);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Detecção de Breaking Changes (quebra de compatibilidade)
+  const breakingChangeReasons: string[] = [];
+  const titleBreaking = /^[a-z]+(\([^\)]+\))?!:/i.test(pr.title);
+  if (titleBreaking) {
+    breakingChangeReasons.push(`Título indica breaking change com '!:' (${pr.title})`);
+  }
+
+  const breakingInBody = /BREAKING[- ]CHANGE(\([^\)]+\))?:/i.test(pr.body || "");
+  if (breakingInBody) {
+    breakingChangeReasons.push("Menção explícita a 'BREAKING CHANGE' na descrição do PR");
+  }
+
+  if (pr.commits && Array.isArray(pr.commits)) {
+    for (const c of pr.commits) {
+      if (/^[a-z]+(\([^\)]+\))?!:/i.test(c.messageHeadline)) {
+        breakingChangeReasons.push(`Commit com breaking change: '${c.messageHeadline}'`);
+      } else if (/BREAKING[- ]CHANGE(\([^\)]+\))?:/i.test(c.messageBody || "")) {
+        breakingChangeReasons.push(
+          `Commit menciona breaking change no corpo: '${c.messageHeadline}'`
+        );
+      }
+    }
+  }
+
+  const hasBreakingChanges = breakingChangeReasons.length > 0;
+  const hasSqlMigrations = sqlFiles.length > 0;
+  const hasDependencyChanges = dependencyFiles.length > 0;
+  const hasEnvChanges = envFiles.length > 0;
+  const hasTestsIncluded = testFiles.length > 0;
+
+  // Cálculo ponderado do nível de risco arquitetural
+  let riskLevel: RiskLevel = "BAIXO";
+  const riskReasons: string[] = [];
+
+  if (hasBreakingChanges) {
+    riskLevel = "CRÍTICO";
+    riskReasons.push(`Quebra de compatibilidade detectada: ${breakingChangeReasons[0]}`);
+  }
+
+  if (sqlDestructive) {
+    riskLevel = "CRÍTICO";
+    riskReasons.push(
+      "Migrações SQL destrutivas identificadas (DROP TABLE / DROP COLUMN / TRUNCATE)."
+    );
+  } else if (hasSqlMigrations) {
+    if (riskLevel !== "CRÍTICO") riskLevel = "ALTO";
+    riskReasons.push(
+      `Contém alterações em migrações de banco de dados SQL (${sqlFiles.length} arquivo(s)).`
+    );
+  }
+
+  if (hasEnvChanges) {
+    if (riskLevel === "BAIXO") riskLevel = "MÉDIO";
+    riskReasons.push(
+      `Alterações em variáveis de ambiente ou configurações sensíveis (${envFiles.join(", ")}).`
+    );
+  }
+
+  if (hasDependencyChanges) {
+    if (riskLevel === "BAIXO") riskLevel = "MÉDIO";
+    const depPreview =
+      dependencyDetails.length > 0
+        ? ` (${dependencyDetails.slice(0, 3).join(", ")})`
+        : "";
+    riskReasons.push(`Alterações em dependências de pacotes${depPreview}.`);
+  }
+
+  const totalLines = (pr.additions || 0) + (pr.deletions || 0);
+  if (totalLines > 1500) {
+    if (riskLevel === "BAIXO" || riskLevel === "MÉDIO") riskLevel = "ALTO";
+    riskReasons.push(`Volume elevado de código alterado (+${pr.additions}/-${pr.deletions} linhas).`);
+  }
+
+  if (codeFiles.length > 0 && !hasTestsIncluded && totalLines > 100) {
+    if (riskLevel === "BAIXO") riskLevel = "MÉDIO";
+    riskReasons.push(
+      "Código de implementação alterado sem inclusão ou atualização de arquivos de teste correspondentes."
+    );
+  }
+
+  if (riskReasons.length === 0) {
+    riskReasons.push("Alterações com baixo risco arquitetural e testes/validação adequados.");
+  }
+
+  return {
+    hasSqlMigrations,
+    sqlFiles,
+    sqlDestructive,
+    hasDependencyChanges,
+    dependencyFiles,
+    dependencyDetails: dependencyDetails.length > 0 ? dependencyDetails : undefined,
+    hasEnvChanges,
+    envFiles,
+    hasBreakingChanges,
+    breakingChangeReasons,
+    hasTestsIncluded,
+    testFiles,
+    riskLevel,
+    riskReasons,
+  };
+}
+
+/**
+ * Condensa um diff unificado inteligentemente para evitar estouro de tokens sem cortar arquivos críticos.
+ * Prioriza arquivos SQL, manifestos de dependências, .env e configurações.
+ */
+export function summarizeDiffIntelligently(diff: string, maxChars: number = 8000): string {
+  const trimmed = (diff || "").trim();
+  if (!trimmed) return "Diff indisponível ou vazio.";
+  if (trimmed.length <= maxChars) return trimmed;
+
+  // Quebra por arquivo: diff --git a/... b/...
+  const fileDiffs = trimmed.split(/(?=^diff --git )/m).filter(Boolean);
+  if (fileDiffs.length <= 1) {
+    return `${trimmed.slice(0, maxChars - 120)}\n\n[...diff truncado inteligentemente para economia de tokens...]`;
+  }
+
+  // Padrões de arquivos críticos priorizados no resumo
+  const criticalPatterns = [
+    /\.sql$/i,
+    /migrations?\//i,
+    /\.env/i,
+    /package\.json/i,
+    /pnpm-lock/i,
+    /yarn\.lock/i,
+    /config\.(ts|js|json)/i,
+  ];
+
+  const criticalBlocks: string[] = [];
+  const normalBlocks: string[] = [];
+
+  for (const block of fileDiffs) {
+    const headerMatch = block.match(/^diff --git a\/(\S+)/m);
+    const filePath = headerMatch ? headerMatch[1] : "";
+    const isCritical = criticalPatterns.some((pattern) => pattern.test(filePath));
+
+    if (isCritical) {
+      criticalBlocks.push(block);
+    } else {
+      normalBlocks.push(block);
+    }
+  }
+
+  const resultBlocks: string[] = [];
+  let currentLength = 0;
+  const reserveCharsForSummary = 250;
+  const budget = maxChars - reserveCharsForSummary;
+
+  // Primeiro inclui os blocos críticos
+  for (const block of criticalBlocks) {
+    if (currentLength + block.length <= budget) {
+      resultBlocks.push(block);
+      currentLength += block.length;
+    } else {
+      const sliceSize = budget - currentLength;
+      if (sliceSize > 300) {
+        resultBlocks.push(
+          `${block.slice(0, sliceSize)}\n[...bloco de arquivo crítico condensado...]`
+        );
+        currentLength += sliceSize;
+      }
+      break;
+    }
+  }
+
+  // Em seguida inclui arquivos normais de forma compactada ou amostrada dentro do orçamento
+  let compactedFilesCount = 0;
+  for (const block of normalBlocks) {
+    const headerMatch = block.match(/^diff --git a\/(\S+) b\/(\S+)/m);
+    const fileName = headerMatch ? headerMatch[1] : "arquivo";
+
+    // Se o arquivo normal cabe por inteiro no orçamento restante, inclui completo
+    if (currentLength + block.length <= budget) {
+      resultBlocks.push(block);
+      currentLength += block.length;
+      continue;
+    }
+
+    // Se não cabe completo, inclui os cabeçalhos e uma amostra das primeiras alterações significativas
+    const lines = block.split("\n");
+    const sampleLines: string[] = [];
+    sampleLines.push(`diff --git a/${fileName} b/${fileName}`);
+
+    let changeLinesCount = 0;
+    for (const l of lines) {
+      if (l.startsWith("@@") || l.startsWith("+") || l.startsWith("-")) {
+        sampleLines.push(l);
+        if (l.startsWith("+") || l.startsWith("-")) {
+          changeLinesCount++;
+          if (changeLinesCount >= 12) break;
+        }
+      }
+    }
+    sampleLines.push("  [...restante do diff do arquivo omitido para concisão...]");
+    const compactSummary = sampleLines.join("\n") + "\n";
+
+    if (currentLength + compactSummary.length <= budget) {
+      resultBlocks.push(compactSummary);
+      currentLength += compactSummary.length;
+    } else {
+      compactedFilesCount++;
+    }
+  }
+
+  let finalDiff = resultBlocks.join("\n");
+  if (compactedFilesCount > 0) {
+    finalDiff += `\n\n[...diff condensado inteligentemente: ${compactedFilesCount} arquivo(s) adicionais omitidos para economia de contexto...]`;
+  }
+
+  return finalDiff;
+}
+
+/**
+ * Constrói a síntese executiva em Markdown (pt-br) estruturada nas seções:
+ * Propósito & Motivação, Principais Mudanças, Arquivos Críticos, Avaliação de Impacto e Notas de Release.
+ */
+export function buildPullRequestExecutiveSummary(
+  pr: GitHubPullRequestItem,
+  impact: ArchitecturalImpact,
+  diffSummary?: string
+): string {
+  const lines: string[] = [];
+
+  const riskEmoji = {
+    BAIXO: "🟢",
+    MÉDIO: "🟡",
+    ALTO: "🟠",
+    CRÍTICO: "🔴",
+  }[impact.riskLevel];
+
+  const stateEmoji =
+    pr.state === "MERGED" ? "🟣" : pr.state === "OPEN" ? "🟢" : "🔴";
+
+  // Cabeçalho Executivo
+  lines.push(`## 📋 Resumo Executivo: PR #${pr.number} - ${pr.title}`);
+  lines.push(
+    `- **Autor**: @${pr.author} | **Status**: ${stateEmoji} ${pr.state} | **Branch**: \`${
+      pr.headRefName || "origem"
+    }\` ➔ \`${pr.baseRefName || "main"}\``
+  );
+  lines.push(`- **URL**: ${pr.url}`);
+  lines.push(
+    `- **Impacto no Código**: +${pr.additions ?? 0} / -${pr.deletions ?? 0} linhas em ~${
+      pr.changedFiles ?? (pr.files?.length || 0)
+    } arquivo(s)`
+  );
+  lines.push("");
+
+  // 1. Propósito & Motivação
+  lines.push("### 🎯 Propósito & Motivação");
+  const cleanBody = (pr.body || "")
+    .replace(/>\s*\*Pull Request criado por Benito\.\*/g, "")
+    .trim();
+
+  // Detecção de issue vinculada (body, commits, branch, título)
+  const commitMessages = (pr.commits || [])
+    .map((c) => `${c.messageHeadline} ${c.messageBody || ""}`)
+    .join(" ");
+  const combinedSearchText = `${cleanBody} ${pr.title} ${
+    pr.headRefName || ""
+  } ${commitMessages}`;
+
+  const issueMatch =
+    combinedSearchText.match(
+      /(?:(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved|issue|issues)[\s/:-]*#?(\d+))/i
+    ) || combinedSearchText.match(/(?:#(\d+)|(?:issue|fix|feat)[\/-](\d+))/i);
+  const relatedIssue = issueMatch ? issueMatch[1] || issueMatch[2] : undefined;
+  if (relatedIssue) {
+    lines.push(`- **Issue Vinculada**: #${relatedIssue}`);
+  }
+
+  const genericHeaders =
+    /^(?:o que foi implementado|descri[cç][aã]o|contexto|resumo|summary|overview|mudan[cç]as|altera[cç][oõ]es)/i;
+
+  if (cleanBody) {
+    const bodyParagraphs = cleanBody
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter((p) => !p.startsWith("#") && p.length > 20);
+
+    if (bodyParagraphs.length > 0) {
+      lines.push(
+        `${bodyParagraphs[0].slice(0, 350)}${
+          bodyParagraphs[0].length > 350 ? "..." : ""
+        }`
+      );
+    } else {
+      const rawBlocks = cleanBody
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 15 && !p.startsWith("---"));
+
+      const firstContentBlock = rawBlocks.find((b) => {
+        const firstLine = b
+          .split("\n")[0]
+          .replace(/^#+\s*/, "")
+          .replace(/^[^\p{L}\p{N}]+/u, "")
+          .trim();
+        return !genericHeaders.test(firstLine);
+      });
+
+      if (firstContentBlock) {
+        const cleanBlock = firstContentBlock
+          .split("\n")
+          .map((l) => (l.startsWith("#") ? `**${l.replace(/^#+\s*/, "")}**` : l))
+          .join("\n");
+        lines.push(
+          `${cleanBlock.slice(0, 400)}${cleanBlock.length > 400 ? "..." : ""}`
+        );
+      } else {
+        lines.push(`Entrega focada em: ${pr.title}`);
+      }
+    }
+  } else {
+    lines.push(`Entrega focada em: ${pr.title}`);
+  }
+  lines.push("");
+
+  // 2. Principais Mudanças
+  lines.push("### 🔄 Principais Mudanças");
+  if (pr.commits && pr.commits.length > 0) {
+    for (const c of pr.commits.slice(0, 6)) {
+      lines.push(`- \`${c.oid.slice(0, 7)}\`: ${c.messageHeadline}`);
+    }
+    if (pr.commits.length > 6) {
+      lines.push(`- *(+${pr.commits.length - 6} commits adicionais inclusos no PR)*`);
+    }
+  } else if (cleanBody) {
+    const bullets = cleanBody
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("- ") || l.startsWith("* "))
+      .slice(0, 5);
+    if (bullets.length > 0) {
+      lines.push(...bullets);
+    } else {
+      lines.push(`- ${pr.title}`);
+    }
+  } else {
+    lines.push(`- ${pr.title}`);
+  }
+  lines.push("");
+
+  // 3. Arquivos Críticos & Áreas Afetadas
+  lines.push("### 📁 Arquivos Críticos & Áreas Afetadas");
+  if (pr.files && pr.files.length > 0) {
+    const sortedFiles = [...pr.files].sort(
+      (a, b) => b.additions + b.deletions - (a.additions + a.deletions)
+    );
+    for (const f of sortedFiles.slice(0, 6)) {
+      lines.push(`- \`${f.path}\`: +${f.additions} / -${f.deletions} linhas`);
+    }
+    if (sortedFiles.length > 6) {
+      lines.push(`- *(+${sortedFiles.length - 6} outros arquivos modificados)*`);
+    }
+  } else {
+    lines.push("- Lista detalhada de arquivos não informada pelo repositório.");
+  }
+  lines.push("");
+
+  // 4. Avaliação de Impacto Arquitetural & Riscos
+  lines.push("### ⚠️ Avaliação de Impacto Arquitetural & Riscos");
+  lines.push(`- **Nível de Risco Consolidado**: ${riskEmoji} **${impact.riskLevel}**`);
+  if (impact.riskReasons.length > 0) {
+    for (const reason of impact.riskReasons) {
+      lines.push(`  - ${reason}`);
+    }
+  }
+  lines.push("");
+
+  // Destaques explícitos de Banco de Dados, Dependências e .env
+  if (impact.hasSqlMigrations) {
+    const destructiveAlert = impact.sqlDestructive
+      ? " ⚠️ **Comandos destrutivos identificados!**"
+      : "";
+    lines.push(`- 🗄️ **Banco de Dados & Migrações**: **Impacto Detectado!**${destructiveAlert}`);
+    for (const f of impact.sqlFiles.slice(0, 4)) {
+      lines.push(`  - Arquivo: \`${f}\``);
+    }
+  } else {
+    lines.push("- 🗄️ **Banco de Dados & Migrações**: Nenhuma migração SQL identificada.");
+  }
+
+  if (impact.hasDependencyChanges) {
+    lines.push("- 📦 **Dependências de Terceiros**: **Alterações Detectadas!**");
+    for (const f of impact.dependencyFiles.slice(0, 3)) {
+      lines.push(`  - Manifesto: \`${f}\``);
+    }
+    if (impact.dependencyDetails && impact.dependencyDetails.length > 0) {
+      lines.push(
+        `  - Novos pacotes / atualizações: ${impact.dependencyDetails.slice(0, 4).join(", ")}`
+      );
+    }
+  } else {
+    lines.push("- 📦 **Dependências de Terceiros**: Nenhuma alteração em dependências externas.");
+  }
+
+  if (impact.hasEnvChanges) {
+    lines.push("- 🔐 **Variáveis de Ambiente & Config**: **Impacto Detectado!**");
+    for (const f of impact.envFiles.slice(0, 4)) {
+      lines.push(`  - Arquivo: \`${f}\``);
+    }
+    lines.push(
+      "  - *Recomendação: Validar atualizações necessárias nos arquivos .env locais e pipelines de deploy.*"
+    );
+  } else {
+    lines.push("- 🔐 **Variáveis de Ambiente & Config**: Nenhuma alteração em arquivos de ambiente (.env).");
+  }
+
+  if (impact.hasBreakingChanges) {
+    lines.push("- 💥 **Quebras de Compatibilidade (Breaking Changes)**: **ATENÇÃO!**");
+    for (const r of impact.breakingChangeReasons) {
+      lines.push(`  - ${r}`);
+    }
+  } else {
+    lines.push("- 💥 **Quebras de Compatibilidade (Breaking Changes)**: Nenhuma quebra identificada.");
+  }
+
+  if (impact.hasTestsIncluded) {
+    lines.push(
+      `- 🧪 **Cobertura de Testes**: **Testes inclusos/atualizados.** (${impact.testFiles.length} arquivo(s) de teste tocados).`
+    );
+  } else {
+    lines.push(
+      "- 🧪 **Cobertura de Testes**: ⚠️ Nenhum arquivo de teste adicionado ou modificado neste PR."
+    );
+  }
+  lines.push("");
+
+  // 5. Notas de Release Sugeridas
+  lines.push("### 📝 Notas de Release Sugeridas");
+  let releaseNoteDesc = "Atualização aplicada com sucesso.";
+  if (cleanBody) {
+    const rawLines = cleanBody
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("---"));
+
+    const genericHeaders =
+      /^(?:o que foi implementado|descri[cç][aã]o|contexto|resumo|summary|overview|mudan[cç]as|altera[cç][oõ]es)/i;
+    const descriptiveLine = rawLines.find((l) => {
+      const normalized = l
+        .replace(/^#+\s*/, "")
+        .replace(/^[^\p{L}\p{N}]+/u, "")
+        .trim();
+      return (
+        normalized.length > 5 &&
+        !genericHeaders.test(normalized) &&
+        !l.startsWith("![")
+      );
+    });
+
+    if (descriptiveLine) {
+      releaseNoteDesc = descriptiveLine
+        .replace(/^#+\s*/, "")
+        .replace(/^[-*]\s*/, "")
+        .slice(0, 200);
+    }
+  }
+  lines.push(`- **${pr.title}**: ${releaseNoteDesc}`);
+
+  // 6. Amostra do Diff Crítico (quando fornecido via includeDiff)
+  if (diffSummary && diffSummary.trim().length > 0) {
+    lines.push("");
+    lines.push("### 🔍 Amostra do Diff Crítico");
+    lines.push("```diff");
+    lines.push(diffSummary.trim());
+    lines.push("```");
+  }
+
+  return lines.join("\n");
 }
 

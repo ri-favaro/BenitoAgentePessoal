@@ -67,7 +67,7 @@ src/
 │   ├── finance-tools.ts       # Gestão financeira com carteiras (CC/VA) e saldo mestre O(1)
 │   ├── obsidian-tools.ts      # Second Brain com Daily Notes e tarefas (Issue #17)
 │   ├── retrieval-tools.ts     # Busca semântica (search_codebase, search_vault, reindex_knowledge)
-│   ├── github-tools.ts        # Gestão de issues no GitHub (create_github_issue, list_github_issues, get_github_issue)
+│   ├── github-tools.ts        # Gestão de issues, PRs e digest executivo (create_github_issue, create_github_pr, list_github_prs, summarize_github_pr, etc.)
 │   ├── orchestration-tools.ts # Ferramentas para console e delegação ao AGY CLI (Issue #21)
 │   ├── audit-tools.ts         # Auto-auditoria holística (run_self_audit)
 │   ├── path-guard.ts          # Validação e restrição de diretórios autorizados
