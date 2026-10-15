@@ -66,6 +66,7 @@ src/
 │   ├── filesystem-tools.ts    # Leitura/escrita de arquivos com sandbox
 │   ├── finance-tools.ts       # Gestão financeira com carteiras (CC/VA) e saldo mestre O(1)
 │   ├── obsidian-tools.ts      # Second Brain com Daily Notes e tarefas (Issue #17)
+│   ├── career-tools.ts        # Copiloto de carreira, análise de vagas e CV adaptado (Issue #26)
 │   ├── retrieval-tools.ts     # Busca semântica (search_codebase, search_vault, reindex_knowledge)
 │   ├── github-tools.ts        # Gestão de issues, PRs e digest executivo (create_github_issue, create_github_pr, list_github_prs, summarize_github_pr, etc.)
 │   ├── orchestration-tools.ts # Ferramentas para console e delegação ao AGY CLI (Issue #21)
@@ -77,7 +78,7 @@ scripts/              # Utilitários de inicialização e manutenção
 └── index-knowledge.ts         # Script CLI para disparar indexação em lote (npm run index)
 .lancedb/             # Armazenamento vetorial local embutido (tabelas: codebase, vault)
 logs/                 # Auditoria contínua de raciocínio e intenções (reasoning.log JSONL)
-tests/                # Suíte de testes automatizados (11 suítes com 100% de cobertura funcional)
+tests/                # Suíte de testes automatizados (12 suítes com 100% de cobertura funcional)
 memory/               # Memória persistente do Benito (profile.md, rules.md, learnings.md, topics/)
 ```
 
@@ -194,6 +195,27 @@ Ao dar manutenção na interface do Telegram (`src/interfaces/telegram.ts` e `te
 
 ---
 
+## 💼 Copiloto de Carreira & Análise de Vagas para Nível Pleno (Issue #26)
+
+Ao manter ou evoluir recursos em `src/tools/career-tools.ts`:
+
+1. **Perfil Profissional Master (`Carreira/perfil-profissional.md`):**
+   - É a **única fonte da verdade** sobre o histórico técnico, acadêmico e projetos práticos de Luiz Ricardo no cofre do Obsidian.
+   - **Regra Inviolável (Zero Alucinação):** O Benito NUNCA inventa tecnologias, experiências profissionais ou cargos não listados no perfil master.
+2. **Análise de Aderência Calibrada para Pleno (`analyze_job_posting`):**
+   - Recebe URL da vaga (leitura via Jina Reader `r.jina.ai` com fallback local) ou texto bruto.
+   - Calcula o Match Score (0 a 100%), Pontos Fortes Imediatos, Quick Wins (baseados na formação do MBA USP/Esalq), Gaps Críticos e Veredito Pragmático (`"Sim"`, `"Com ressalvas"`, `"Não"`).
+   - Persiste as análises de forma estruturada e idempotente em `Carreira/vagas-analisadas.json`.
+3. **Adaptação Cirúrgica de CV & Pitch de Conexão (`generate_tailored_application`):**
+   - Gera currículo personalizado em Markdown (`Carreira/Vagas/YYYY-MM-Empresa-CV.md`).
+   - Insere o Pitch de Conexão de 3 parágrafos em destaque logo no início do documento (`## 🎯 Pitch de Conexão`) para abordagem ágil no LinkedIn ou a recrutadores.
+4. **Observatório de Mercado & Relatório de Gaps (`generate_career_report`):**
+   - Processa o histórico de `vagas-analisadas.json`, consolidando as stacks mais exigidas e uma matriz de estudos priorizada (Esforço vs Impacto).
+   - Mantém atualizada a nota executiva `Carreira/relatorio-gaps-mercado.md` no cofre.
+   - Disponível via comandos `/carreira`, `/carreira gaps` e `/carreira vagas` no terminal e Telegram.
+
+---
+
 ## 📜 Convenções, Scripts & Validação Obrigatória
 
 ### Comandos Úteis (`package.json`)
@@ -205,8 +227,8 @@ Ao dar manutenção na interface do Telegram (`src/interfaces/telegram.ts` e `te
 | `npm run embedding:serve` | Inicia o servidor local do llama-server para embeddings (EmbeddingGemma-2) |
 | `npm run index` | Dispara a indexação incremental do codebase e cofre Obsidian |
 | `npm run build` | Compila o projeto com o TypeScript (`tsc`) |
-| `npm test` | Executa a suíte completa de testes automatizados (todas as 11 suítes) |
-| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`, `automation`, `obsidian`, `orchestration`) |
+| `npm test` | Executa a suíte completa de testes automatizados (todas as 13 suítes) |
+| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`, `automation`, `obsidian`, `orchestration`, `career`) |
 
 ### Regras Gerais
 - **Idioma de Commits:** Sempre em **Português do Brasil (pt-br)** com Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.).

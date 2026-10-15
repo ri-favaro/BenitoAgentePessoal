@@ -151,6 +151,17 @@ export function formatToolFeedback(
       const isDry = args.dryRun ? " (simulação)" : " (executando com AGY CLI - aguarde...)";
       return `🤖 Delegando issue ${num} para coding agent${isDry}...`;
     }
+    case "analyze_job_posting": {
+      const comp = typeof args.company === "string" ? args.company : "vaga";
+      return `💼 Analisando aderência de vaga para Pleno [${comp}]...`;
+    }
+    case "generate_tailored_application": {
+      const comp = typeof args.company === "string" ? args.company : "vaga";
+      return `📄 Gerando currículo adaptado e pitch de abordagem [${comp}]...`;
+    }
+    case "generate_career_report": {
+      return `📊 Consolidando gaps de mercado e observatório de carreira...`;
+    }
     default:
       return `⚙️ Executando: ${toolName}...`;
   }
