@@ -101,12 +101,14 @@ export class TaskPacker {
 
     // Instruções de Entrega & Validação
     sections.push(
-      `## 5. 🎯 PASSOS OBRIGATÓRIOS PARA CONCLUSÃO`,
+      `## 5. Passos Obrigatórios para Conclusão`,
       `1. Se a branch \`${branchName}\` ainda não existir, crie-a a partir da branch base atual.`,
       `2. Implemente as alterações de código necessárias respeitando a arquitetura existente.`,
       `3. Crie ou atualize os testes unitários em \`tests/\` para garantir 100% de cobertura funcional.`,
       `4. Execute a compilação (\`npm run build\`) e a suíte de testes (\`npm test\`) para garantir que nada foi quebrado.`,
-      `5. Realize o commit em português do Brasil seguindo Conventional Commits.`
+      `5. Realize o commit em português do Brasil seguindo Conventional Commits.`,
+      `6. Faça o push seguro da branch para o origin (\`git push -u origin ${branchName}\`).`,
+      `7. Nunca faça merge direto na branch principal (main/master). A Pull Request será aberta e avaliada pelo Luiz Ricardo.`
     );
 
     const fullPrompt = sections.join("\n\n");

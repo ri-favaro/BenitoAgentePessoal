@@ -140,7 +140,7 @@ Ao manter ou evoluir recursos de recuperação e embeddings em `src/core/` e `sr
 
 ---
 
-## 🚀 Auto-Melhoria, Auditoria & Protocolo Human-in-the-Loop (GitHub)
+## 🚀 Auto-Melhoria, Gestão de Issues, PRs & Protocolo Human-in-the-Loop (GitHub)
 
 Ao evoluir os módulos `src/core/self-auditor.ts`, `src/core/github-service.ts` e `src/tools/github-tools.ts`:
 
@@ -148,13 +148,15 @@ Ao evoluir os módulos `src/core/self-auditor.ts`, `src/core/github-service.ts` 
    - O `SelfAuditor` monitora o arquivo `logs/reasoning.log` para calcular tempos médios de resposta e detectar gargalos de latência.
    - Realiza varreduras estáticas de cobertura comparando arquivos do `src/` com as suítes de `tests/`, apontando possíveis lacunas de teste (`testGaps`).
    - Verifica violações de sandbox e diretórios não autorizados.
-2. **Protocolo Estrito Human-in-the-Loop para Criação de Issues:**
-   - **Regra Inviolável:** O Benito NUNCA cria issues silenciosamente ou autonomamente no GitHub.
-   - Ao identificar uma limitação técnica ou inconsistência, o agente deve:
-     1. Consultar o backlog aberto via `list_github_issues` para evitar duplicatas.
-     2. Apresentar no chat uma minuta objetiva contendo título formatado em Conventional Commits (ex: `feat(tools): ...`) e proposta de escopo.
-     3. Pedir autorização explícita ao usuário (*"Deseja que eu abra uma issue no repositório com essa proposta?"*).
-     4. Acionar `create_github_issue` **somente** após a aprovação expressa do Luiz Ricardo.
+2. **Distinção Estrita entre Issue e Pull Request (PR):**
+   - **Issues (`create_github_issue`):** Itens de planejamento, débitos técnicos e propostas de novas capacidades. NUNCA recrie uma issue já existente.
+   - **Pull Requests (`create_github_pr`):** Proposta de merge de código pronto de uma branch de feature para a branch base (`main`). NUNCA crie uma issue quando o usuário pedir para abrir um PR.
+3. **Protocolo Estrito Human-in-the-Loop:**
+   - **Regra Inviolável:** O Benito NUNCA cria issues ou PRs silenciosamente ou autonomamente no GitHub.
+   - Ao identificar uma melhoria ou ao concluir uma branch, apresente no chat uma minuta objetiva (título em Conventional Commits e escopo) e solicite autorização explícita do Luiz Ricardo antes de disparar `create_github_issue` ou `create_github_pr`.
+4. **Marca d'Água Padronizada no Body (Sem Emojis):**
+   - Toda Issue criada pelo Benito recebe no rodapé: `> *Issue criada e registrada por Benito.*`
+   - Todo PR criado pelo Benito recebe no rodapé: `> *Pull Request criado por Benito.*`
 
 ---
 
@@ -164,15 +166,16 @@ Ao manter ou evoluir recursos em `src/orchestration/` e `src/tools/orchestration
 
 1. **Desacoplamento de Janelas de Contexto (Context Decoupling):**
    - O Benito opera com janela de 24k tokens no Qwen 9B local para especificação, supervisão e RAG sem ser sobrecarregado por arquivos gigantes.
-   - O agente de coding (**AGY CLI**) roda em processo isolado (`agy --prompt "..." --dangerously-skip-permissions`), carregando árvores inteiras de código e executando lint/diff de forma autônoma.
+   - O agente de coding (**AGY CLI**) roda em processo isolado (`agy --prompt "..." --dangerously-skip-permissions`), carregando árvores inteiras de código e executando lint/diff de forma autônoma sem travar no terminal pedindo confirmações.
 2. **Defesa em Profundidade & Sandbox (`TerminalRunner`):**
    - **Whitelist de Comandos:** Apenas executáveis permitidos (`agy`, `npm`, `npx`, `git`, `node`) podem ser executados pelo runner. Qualquer outro binário é bloqueado.
    - **Sandbox de CWD:** O diretório de execução deve ser validado via `validateAllowedPath` contra `ALLOWED_DIRECTORIES`.
    - **Controle de Timeout:** Comandos possuem tempo limite configurado (padrão 5 minutos / 300.000 ms) com abort gracioso para prevenir travamentos de terminal.
 3. **Módulo de Context Packing (`TaskPacker`):**
-   - Estrutura as instruções do AGY com 5 seções padronizadas: Objetivo & Metadados da Issue, Requisitos, Diretrizes de Engenharia do Repositório, Snippets de Código via LanceDB e Critérios Obrigatórios de Entrega (branch dedicada, testes e Conventional Commits em pt-br).
+   - Estrutura as instruções do AGY com seções padronizadas: Objetivo & Metadados da Issue, Requisitos, Diretrizes de Engenharia do Repositório, Snippets de Código via LanceDB e Critérios Obrigatórios de Entrega (branch dedicada, testes, Conventional Commits em pt-br e `git push -u origin <branch>`).
 4. **Protocolo Estrito Human-in-the-Loop para Execução de Código:**
    - **Regra Inviolável:** O Benito NUNCA dispara a ferramenta `delegate_issue_to_coding_agent` em modo de execução real (`confirmedByUser: true`) sem apresentar a proposta e obter autorização expressa do Luiz Ricardo.
+   - Suporta a flag `autoCreatePr: true` para, após o build passar com 100% de sucesso, sincronizar a branch no GitHub e abrir a Pull Request automaticamente com marca d'água.
    - Para prévias e inspeção de prompt estruturado, utilize sempre `prepare_coding_task` ou o parâmetro `dryRun: true`.
 
 ## 💬 Módulo do Telegram & Session Tracker (TTL de Inatividade)

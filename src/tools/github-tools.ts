@@ -165,5 +165,82 @@ export function createGitHubTools(gitHubService?: GitHubService) {
         }
       },
     }),
+
+    create_github_pr: tool({
+      description:
+        "Abre um novo Pull Request (PR) no GitHub para propor alterações de código já implementadas em uma branch. ATENÇÃO OBRIGATÓRIA (HUMAN-IN-THE-LOOP): NUNCA acione esta ferramenta sem antes propor a minuta no chat (título, branch e escopo) e obter autorização expressa do Luiz Ricardo. NUNCA confunda PR com Issue.",
+      parameters: z.object({
+        title: z
+          .string()
+          .describe(
+            "Título do Pull Request seguindo Conventional Commits em português do Brasil (ex: 'feat(tools): adicionar suporte a PRs')."
+          ),
+        body: z
+          .string()
+          .describe(
+            "Descrição detalhada do Pull Request em Markdown (motivação, o que foi alterado e como testar)."
+          ),
+        headBranch: z
+          .string()
+          .optional()
+          .describe(
+            "Nome da branch de origem contendo as alterações (ex: 'feat/issue-29-leitura-prs'). Se omitido, usa a branch atual."
+          ),
+        baseBranch: z
+          .string()
+          .optional()
+          .default("main")
+          .describe("Branch de destino do Pull Request (padrão: 'main')."),
+        labels: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Labels adicionais para o PR. A label 'benito-pr' é adicionada automaticamente."
+          ),
+        draft: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("Se true, cria o PR como rascunho (Draft PR)."),
+        repo: z
+          .string()
+          .optional()
+          .describe(
+            "Repositório alvo no formato 'owner/repo'. Se omitido, utiliza o repositório atual do projeto."
+          ),
+      }),
+      execute: async ({ title, body, headBranch, baseBranch, labels, draft, repo }) => {
+        try {
+          const result = await service.createPullRequest({
+            title,
+            body,
+            headBranch,
+            baseBranch,
+            labels,
+            draft,
+            repo,
+          });
+
+          if (result.success) {
+            return {
+              success: true,
+              url: result.url,
+              prNumber: result.prNumber,
+              message: `Pull Request criado com sucesso no GitHub: ${result.url}`,
+            };
+          }
+
+          return {
+            success: false,
+            error: result.error,
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            error: `Erro ao executar create_github_pr: ${error?.message || String(error)}`,
+          };
+        }
+      },
+    }),
   };
 }

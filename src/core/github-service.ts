@@ -58,6 +58,23 @@ export interface GetIssueResult {
   error?: string;
 }
 
+export interface CreatePullRequestOptions {
+  title: string;
+  body: string;
+  headBranch?: string;
+  baseBranch?: string;
+  labels?: string[];
+  draft?: boolean;
+  repo?: string;
+}
+
+export interface PullRequestExecutionResult {
+  success: boolean;
+  url?: string;
+  prNumber?: number;
+  error?: string;
+}
+
 export class GitHubService {
   private projectRoot: string;
 
@@ -79,17 +96,52 @@ export class GitHubService {
     // Garante sempre a label de auto-melhoria autônoma do Benito
     labelsSet.add("benito-sugestao");
 
-    const defaultFooter =
-      "\n\n---\n> 🤖 *Issue gerada e registrada pelo Benito (Agente Pessoal) via Human-in-the-Loop com aprovação de Luiz Ricardo.*";
+    const defaultFooter = "\n\n---\n> *Issue criada e registrada por Benito.*";
 
-    const bodyWithFooter = options.body.includes("Issue gerada e registrada pelo Benito")
+    const bodyWithFooter =
+      options.body.includes("Issue criada e registrada por Benito") ||
+      options.body.includes("Issue gerada e registrada pelo Benito")
+        ? options.body
+        : `${options.body.trim()}${defaultFooter}`;
+
+    return {
+      title: options.title.trim(),
+      body: bodyWithFooter,
+      labels: Array.from(labelsSet),
+      repo: options.repo?.trim() || undefined,
+    };
+  }
+
+  /**
+   * Prepara os metadados do pull request aplicando o rodapé de marca d'água e a label padrão.
+   */
+  preparePullRequestPayload(options: CreatePullRequestOptions): {
+    title: string;
+    body: string;
+    headBranch?: string;
+    baseBranch: string;
+    labels: string[];
+    draft: boolean;
+    repo?: string;
+  } {
+    const rawLabels = options.labels || [];
+    const labelsSet = new Set(rawLabels.map((l) => l.trim()).filter(Boolean));
+    // Label para identificar PRs criadas pelo Benito
+    labelsSet.add("benito-pr");
+
+    const defaultFooter = "\n\n---\n> *Pull Request criado por Benito.*";
+
+    const bodyWithFooter = options.body.includes("Pull Request criado por Benito")
       ? options.body
       : `${options.body.trim()}${defaultFooter}`;
 
     return {
       title: options.title.trim(),
       body: bodyWithFooter,
+      headBranch: options.headBranch?.trim() || undefined,
+      baseBranch: options.baseBranch?.trim() || "main",
       labels: Array.from(labelsSet),
+      draft: options.draft ?? false,
       repo: options.repo?.trim() || undefined,
     };
   }
@@ -129,6 +181,75 @@ export class GitHubService {
       return {
         success: false,
         error: `Falha ao executar 'gh issue create': ${error?.message || String(error)}`,
+      };
+    }
+  }
+
+  /**
+   * Executa a criação do Pull Request no GitHub via CLI `gh pr create`.
+   * Garante push da branch de origem para o origin se headBranch for fornecida.
+   */
+  async createPullRequest(options: CreatePullRequestOptions): Promise<PullRequestExecutionResult> {
+    try {
+      const payload = this.preparePullRequestPayload(options);
+
+      // Se headBranch foi fornecida, tenta sincronizar a branch no remoto
+      if (payload.headBranch) {
+        try {
+          await execFileAsync("git", ["push", "-u", "origin", payload.headBranch], {
+            cwd: this.projectRoot,
+            windowsHide: true,
+          });
+        } catch {
+          // Se o push falhar (ex: branch já atualizada ou offline), deixa o gh CLI relatar caso falte no remoto
+        }
+      }
+
+      const args = [
+        "pr",
+        "create",
+        "--title",
+        payload.title,
+        "--body",
+        payload.body,
+        "--base",
+        payload.baseBranch,
+      ];
+
+      if (payload.headBranch) {
+        args.push("--head", payload.headBranch);
+      }
+
+      for (const label of payload.labels) {
+        args.push("--label", label);
+      }
+
+      if (payload.draft) {
+        args.push("--draft");
+      }
+
+      if (payload.repo) {
+        args.push("--repo", payload.repo);
+      }
+
+      const { stdout } = await execFileAsync("gh", args, {
+        cwd: this.projectRoot,
+        windowsHide: true,
+      });
+
+      const url = stdout.trim();
+      const matchNumber = url.match(/\/pull\/(\d+)$/);
+      const prNumber = matchNumber ? parseInt(matchNumber[1], 10) : undefined;
+
+      return {
+        success: true,
+        url,
+        prNumber,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: `Falha ao executar 'gh pr create': ${error?.message || String(error)}`,
       };
     }
   }
