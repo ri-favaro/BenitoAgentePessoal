@@ -7,9 +7,9 @@ async function runGitHubTests() {
   console.log("🧪 Iniciando testes do módulo de integração com GitHub...\n");
 
   // ==========================================
-  // 1. Testando Formatação e Payload de Issues
+  // 1. Testando Formatação e Payload de Issues e PRs
   // ==========================================
-  console.log("1. Testando prepareIssuePayload (labels e rodapé)...");
+  console.log("1. Testando prepareIssuePayload e preparePullRequestPayload (labels e rodapé sem emojis)...");
   const service = new GitHubService();
 
   const payload1 = service.prepareIssuePayload({
@@ -22,20 +22,56 @@ async function runGitHubTests() {
   assert.ok(payload1.labels.includes("benito-sugestao"), "Deve conter label 'benito-sugestao'");
   assert.ok(payload1.labels.includes("enhancement"), "Deve preservar 'enhancement'");
   assert.ok(
-    payload1.body.includes("Issue gerada e registrada pelo Benito"),
+    payload1.body.includes("Issue criada e registrada por Benito"),
     "Deve conter o rodapé assinado do Benito"
+  );
+  assert.ok(
+    !payload1.body.includes("🤖"),
+    "Rodapé não deve conter emoji robótico"
   );
 
   // Não duplica rodapé se já presente
   const payload2 = service.prepareIssuePayload({
     title: "fix: bug",
-    body: "Corpo com > 🤖 *Issue gerada e registrada pelo Benito* já incluso.",
+    body: "Corpo com > *Issue criada e registrada por Benito.* já incluso.",
   });
   const occurrences = (
-    payload2.body.match(/Issue gerada e registrada pelo Benito/g) || []
+    payload2.body.match(/Issue criada e registrada por Benito/g) || []
   ).length;
   assert.strictEqual(occurrences, 1, "Não deve duplicar o rodapé");
-  console.log("✔ prepareIssuePayload validado com sucesso!");
+
+  // Testando preparePullRequestPayload
+  const payloadPR = service.preparePullRequestPayload({
+    title: "feat(orchestration): suporte a PRs",
+    body: "Descrição detalhada do PR.",
+    headBranch: "feat/pr-support",
+    labels: ["enhancement"],
+  });
+
+  assert.strictEqual(payloadPR.title, "feat(orchestration): suporte a PRs");
+  assert.ok(payloadPR.labels.includes("benito-pr"), "Deve conter label 'benito-pr'");
+  assert.ok(payloadPR.labels.includes("enhancement"), "Deve preservar 'enhancement'");
+  assert.strictEqual(payloadPR.headBranch, "feat/pr-support");
+  assert.strictEqual(payloadPR.baseBranch, "main");
+  assert.ok(
+    payloadPR.body.includes("Pull Request criado por Benito"),
+    "Deve conter o rodapé assinado de PR do Benito"
+  );
+  assert.ok(
+    !payloadPR.body.includes("🤖"),
+    "Rodapé do PR não deve conter emoji robótico"
+  );
+
+  // Não duplica rodapé de PR
+  const payloadPR2 = service.preparePullRequestPayload({
+    title: "fix: ajuste",
+    body: "Corpo com > *Pull Request criado por Benito.* já incluso.",
+  });
+  const occurrencesPR = (
+    payloadPR2.body.match(/Pull Request criado por Benito/g) || []
+  ).length;
+  assert.strictEqual(occurrencesPR, 1, "Não deve duplicar o rodapé do PR");
+  console.log("✔ prepareIssuePayload e preparePullRequestPayload validados com sucesso!");
 
   // ==========================================
   // 2. Testando listIssues com Mock / Simulação de Comportamento
@@ -93,6 +129,17 @@ async function runGitHubTests() {
         },
       };
     }
+
+    async createPullRequest(options: any) {
+      if (options.title.includes("erro")) {
+        return { success: false, error: "Erro simulado do gh pr create" };
+      }
+      return {
+        success: true,
+        url: "https://github.com/ri-favaro/BenitoAgentePessoal/pull/101",
+        prNumber: 101,
+      };
+    }
   }
 
   const mockService = new MockGitHubService();
@@ -100,7 +147,7 @@ async function runGitHubTests() {
   // ==========================================
   // 3. Testando Ferramentas do AI SDK
   // ==========================================
-  console.log("\n3. Testando ferramentas create_github_issue e list_github_issues...");
+  console.log("\n3. Testando ferramentas create_github_issue, list_github_issues, get_github_issue e create_github_pr...");
   const tools = createGitHubTools(mockService as any);
 
   // 3.1 create_github_issue - Sucesso
@@ -157,6 +204,26 @@ async function runGitHubTests() {
   });
   assert.strictEqual(getIssueFailRes.success, false);
   console.log("✔ get_github_issue tratou issue inexistente com sucesso!");
+
+  // 3.7 create_github_pr - Sucesso
+  const prRes: any = await tools.create_github_pr.execute({
+    title: "feat(tools): suporte a PR",
+    body: "Corpo do PR de teste",
+    headBranch: "feat/pr-support",
+  });
+  assert.strictEqual(prRes.success, true);
+  assert.strictEqual(prRes.prNumber, 101);
+  assert.ok(prRes.url.includes("/pull/101"));
+  console.log("✔ create_github_pr executou com sucesso!");
+
+  // 3.8 create_github_pr - Falha controlada
+  const prFailRes: any = await tools.create_github_pr.execute({
+    title: "erro: falha no pr",
+    body: "Corpo com falha",
+  });
+  assert.strictEqual(prFailRes.success, false);
+  assert.ok(prFailRes.error.includes("Erro simulado"));
+  console.log("✔ create_github_pr tratou erro graciosamente!");
 
   // ==========================================
   // 4. Testando Integração com SelfAuditor

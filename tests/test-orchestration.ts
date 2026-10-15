@@ -118,9 +118,11 @@ async function runOrchestrationTests() {
     packed.prompt.includes("DIRETRIZES DE ENGENHARIA") &&
     packed.prompt.includes("src/tools/path-guard.ts") &&
     packed.prompt.includes("Não utilize frameworks externos de IA.") &&
+    packed.prompt.includes("Passos Obrigatórios para Conclusão") &&
+    packed.prompt.includes("git push -u origin") &&
     packed.contextSnippetsCount === 1
   ) {
-    console.log(pc.green("✔ TaskPacker empacotou contexto, regras e código com alta fidelidade!"));
+    console.log(pc.green("✔ TaskPacker empacotou contexto, regras, código e instruções de git push com alta fidelidade!"));
   } else {
     console.error(pc.red("✖ Falha na montagem de prompt do TaskPacker:"), packed);
     process.exit(1);
@@ -176,6 +178,24 @@ async function runOrchestrationTests() {
     console.log(pc.green("✔ delegateIssue executou simulação em dry-run perfeitamente!"));
   } else {
     console.error(pc.red("✖ Falha na execução dry-run do orchestrator:"), dryRunRes);
+    process.exit(1);
+  }
+
+  // 3.2 Teste com autoCreatePr: true em dry-run
+  const dryRunPrRes = await orchestrator.delegateIssue({
+    issueNumber: 21,
+    dryRun: true,
+    autoCreatePr: true,
+  });
+
+  if (
+    dryRunPrRes.success &&
+    dryRunPrRes.pullRequest?.prNumber === 999 &&
+    dryRunPrRes.pullRequest?.url?.includes("[DRY-RUN]")
+  ) {
+    console.log(pc.green("✔ delegateIssue com autoCreatePr simulou abertura de PR em dry-run!"));
+  } else {
+    console.error(pc.red("✖ Falha na simulação de PR em delegateIssue:"), dryRunPrRes);
     process.exit(1);
   }
 
@@ -243,7 +263,25 @@ async function runOrchestrationTests() {
     process.exit(1);
   }
 
-  console.log(pc.green("\n🎉 Todos os 9 testes de Orquestração Técnica & Coding Runner passaram com 100% de sucesso! 🚀\n"));
+  // 4.5 Execução com dryRun: true e autoCreatePr: true através da ferramenta
+  const toolDryRunPrRes: any = await tools.delegate_issue_to_coding_agent.execute({
+    issueNumber: 21,
+    confirmedByUser: false,
+    dryRun: true,
+    autoCreatePr: true,
+  });
+
+  if (
+    toolDryRunPrRes.success &&
+    toolDryRunPrRes.pullRequest?.prNumber === 999
+  ) {
+    console.log(pc.green("✔ Ferramenta delegate_issue_to_coding_agent com autoCreatePr retornou PR com sucesso!"));
+  } else {
+    console.error(pc.red("✖ Falha em delegate_issue_to_coding_agent com autoCreatePr:"), toolDryRunPrRes);
+    process.exit(1);
+  }
+
+  console.log(pc.green("\nTodos os 11 testes de Orquestração Técnica & Coding Runner passaram com 100% de sucesso!\n"));
 }
 
 runOrchestrationTests().catch((err) => {

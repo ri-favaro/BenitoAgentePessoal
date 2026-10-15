@@ -208,6 +208,13 @@ export function createOrchestrationTools(options?: OrchestrationToolsOptions) {
           .number()
           .optional()
           .describe("Tempo limite em milissegundos para o AGY CLI (padrão: 300000)."),
+        autoCreatePr: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            "Se true, após o AGY finalizar e a compilação local passar, envia a branch ao GitHub e abre a Pull Request automaticamente."
+          ),
       }),
       execute: async ({
         issueNumber,
@@ -218,6 +225,7 @@ export function createOrchestrationTools(options?: OrchestrationToolsOptions) {
         dryRun = false,
         repo,
         timeoutMs,
+        autoCreatePr = false,
       }) => {
         try {
           // Trava de segurança Human-in-the-Loop
@@ -237,6 +245,7 @@ export function createOrchestrationTools(options?: OrchestrationToolsOptions) {
             dryRun,
             repo,
             timeoutMs,
+            autoCreatePr,
           });
 
           if (!result.success) {
@@ -255,9 +264,12 @@ export function createOrchestrationTools(options?: OrchestrationToolsOptions) {
             durationMs: result.terminalResult?.durationMs,
             terminalStdout: result.terminalResult?.stdout,
             validation: result.validation,
+            pullRequest: result.pullRequest,
             message: dryRun
               ? `[DRY-RUN] Simulação concluída com sucesso para a Issue #${issueNumber}. O prompt estruturado está pronto para ser executado quando autorizado.`
-              : `Implementação da Issue #${issueNumber} executada pelo AGY CLI. Validação técnica: ${result.validation?.buildSuccess ? "Build OK" : "Falha de build"}.`,
+              : `Implementação da Issue #${issueNumber} executada pelo AGY CLI. Validação técnica: ${
+                  result.validation?.buildSuccess ? "Build OK" : "Falha de build"
+                }.${result.pullRequest?.url ? ` Pull Request aberto: ${result.pullRequest.url}` : ""}`,
           };
         } catch (err: any) {
           return {

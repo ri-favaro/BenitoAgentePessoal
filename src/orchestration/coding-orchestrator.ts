@@ -32,6 +32,11 @@ export interface FullOrchestrationResult {
   packedTask: PackedTask;
   terminalResult?: TerminalExecutionResult;
   validation?: ValidationSummary;
+  pullRequest?: {
+    url?: string;
+    prNumber?: number;
+    error?: string;
+  };
   error?: string;
 }
 
@@ -235,6 +240,7 @@ export class CodingOrchestrator {
     dryRun?: boolean;
     cwd?: string;
     timeoutMs?: number;
+    autoCreatePr?: boolean;
   }): Promise<FullOrchestrationResult> {
     // 1. Preparação
     const prep = await this.prepareTask({
@@ -284,11 +290,41 @@ export class CodingOrchestrator {
       validation = await this.validateResults(options.cwd);
     }
 
+    // 4. Abertura opcional de Pull Request se solicitado
+    let pullRequest: { url?: string; prNumber?: number; error?: string } | undefined;
+    if (options.autoCreatePr) {
+      if (options.dryRun) {
+        pullRequest = {
+          url: `[DRY-RUN] Simulação de Pull Request para branch ${prep.packedTask.branchName}`,
+          prNumber: 999,
+        };
+      } else if (validation?.buildSuccess) {
+        const prRes = await this.gitHubService.createPullRequest({
+          title: prep.packedTask.issueTitle,
+          body: `Implementa a Issue #${prep.packedTask.issueNumber} via AGY CLI.\n\n### Resumo da Validação Técnica\n${validation.details}`,
+          headBranch: prep.packedTask.branchName,
+          repo: options.repo,
+        });
+
+        if (prRes.success) {
+          pullRequest = {
+            url: prRes.url,
+            prNumber: prRes.prNumber,
+          };
+        } else {
+          pullRequest = {
+            error: prRes.error || "Falha ao criar Pull Request.",
+          };
+        }
+      }
+    }
+
     return {
       success: true,
       packedTask: prep.packedTask,
       terminalResult: termRes,
       validation,
+      pullRequest,
     };
   }
 }
