@@ -123,6 +123,17 @@ async function runGitHubTests() {
   assert.strictEqual(dropSqlImpact.hasSqlMigrations, true);
   assert.strictEqual(dropSqlImpact.sqlDestructive, true);
 
+  // Cenário C2: Risco Crítico (SQL Destrutivo com TRUNCATE sem TABLE)
+  const truncateSqlImpact = analyzeArchitecturalImpact(
+    {
+      title: "refactor(db): limpeza de logs legados",
+      files: [{ path: "supabase/migrations/20261014_truncate.sql", additions: 5, deletions: 0 }],
+    },
+    "+ TRUNCATE legacy_logs CASCADE;"
+  );
+  assert.strictEqual(truncateSqlImpact.riskLevel, "CRÍTICO");
+  assert.strictEqual(truncateSqlImpact.sqlDestructive, true);
+
   // Cenário D: Risco Alto (Migração SQL não-destrutiva)
   const normalSqlImpact = analyzeArchitecturalImpact(
     {
@@ -144,12 +155,24 @@ async function runGitHubTests() {
         { path: ".env.example", additions: 1, deletions: 0 },
       ],
     },
-    '+   "new-dep": "^2.1.0",\n+ NEW_SERVICE_TOKEN=xyz'
+    'diff --git a/package.json b/package.json\n+   "@ai-sdk/openai": "^1.0.0",\n+   "new-dep": "^2.1.0",\n+   "version": "1.2.0",\ndiff --git a/package-lock.json b/package-lock.json\n+   "resolved": "https://registry.npmjs.org/zod",\ndiff --git a/.env.example b/.env.example\n+ NEW_SERVICE_TOKEN=xyz'
   );
   assert.strictEqual(envDepImpact.riskLevel, "MÉDIO");
   assert.strictEqual(envDepImpact.hasDependencyChanges, true);
   assert.strictEqual(envDepImpact.hasEnvChanges, true);
   assert.ok(envDepImpact.dependencyDetails?.some((d) => d.includes("new-dep")));
+  assert.ok(
+    envDepImpact.dependencyDetails?.some((d) => d.includes("@ai-sdk/openai")),
+    "Deve capturar pacotes com escopo (@)"
+  );
+  assert.ok(
+    !envDepImpact.dependencyDetails?.some((d) => d.includes("version")),
+    "Não deve capturar metadados do package.json"
+  );
+  assert.ok(
+    !envDepImpact.dependencyDetails?.some((d) => d.includes("resolved")),
+    "Não deve capturar linhas do package-lock.json"
+  );
 
   // Cenário F: Risco Médio (Código sem arquivos de teste)
   const noTestImpact = analyzeArchitecturalImpact({
@@ -175,12 +198,13 @@ async function runGitHubTests() {
   assert.ok(condensedDiff.includes("migrations/01_init.sql"), "Deve priorizar arquivo SQL crítico");
   assert.ok(condensedDiff.includes("package.json"), "Deve priorizar package.json");
 
-  // Cenário H: buildPullRequestExecutiveSummary (estrutura completa de seções)
+  // Cenário H: buildPullRequestExecutiveSummary (estrutura completa de seções, issue vinculada e release note limpa)
   const execSummary = buildPullRequestExecutiveSummary(
     {
       number: 16,
       title: "feat(github): resumo executivo de PRs",
-      body: "## Contexto\nImplementa Issue #16 para análise de PRs.\n\n- Adiciona summarize_github_pr",
+      body: "## 📦 O que foi implementado\n\n### 1. Resumo Executivo de PRs\n- Detecção de migrações SQL e breaking changes.",
+      headRefName: "feat/github-pr-digest-issue-16",
       state: "OPEN",
       author: "ri-favaro",
       url: "https://github.com/ri-favaro/BenitoAgentePessoal/pull/16",
@@ -193,14 +217,27 @@ async function runGitHubTests() {
         { path: "tests/test-github.ts", additions: 10, deletions: 5 },
       ],
     },
-    lowImpact
+    lowImpact,
+    "diff --git a/src/test.ts b/src/test.ts\n+ console.log('ok');"
   );
   assert.ok(execSummary.includes("## 📋 Resumo Executivo: PR #16"));
   assert.ok(execSummary.includes("### 🎯 Propósito & Motivação"));
+  assert.ok(
+    execSummary.includes("- **Issue Vinculada**: #16"),
+    "Deve detectar issue vinculada a partir da branch"
+  );
   assert.ok(execSummary.includes("### 🔄 Principais Mudanças"));
   assert.ok(execSummary.includes("### 📁 Arquivos Críticos & Áreas Afetadas"));
   assert.ok(execSummary.includes("### ⚠️ Avaliação de Impacto Arquitetural & Riscos"));
   assert.ok(execSummary.includes("### 📝 Notas de Release Sugeridas"));
+  assert.ok(
+    !execSummary.includes("## 📦 O que foi implementado"),
+    "Nota de release não deve conter títulos markdown crus"
+  );
+  assert.ok(
+    execSummary.includes("### 🔍 Amostra do Diff Crítico"),
+    "Deve incluir amostra do diff quando fornecido"
+  );
   assert.ok(execSummary.includes("Banco de Dados & Migrações"));
   assert.ok(execSummary.includes("Dependências de Terceiros"));
   assert.ok(execSummary.includes("Variáveis de Ambiente & Config"));

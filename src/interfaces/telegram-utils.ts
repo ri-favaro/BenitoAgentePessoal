@@ -120,6 +120,24 @@ export function formatToolFeedback(
       const num = typeof args.issueNumber === "number" ? `#${args.issueNumber}` : "";
       return `🐙 Consultando detalhes da issue ${num}...`;
     }
+    case "create_github_pr": {
+      const t = typeof args.title === "string" ? args.title : "";
+      return `🐙 Abrindo Pull Request no GitHub: "${t}"...`;
+    }
+    case "list_github_prs": {
+      return `🐙 Listando Pull Requests no GitHub...`;
+    }
+    case "get_github_pr": {
+      const num = typeof args.prNumber === "number" ? `#${args.prNumber}` : "";
+      return `🐙 Consultando detalhes do Pull Request ${num}...`;
+    }
+    case "summarize_merged_prs": {
+      return `📊 Gerando resumo executivo de PRs mergeados...`;
+    }
+    case "summarize_github_pr": {
+      const num = typeof args.prNumber === "number" ? `#${args.prNumber}` : "";
+      return `🐙 Analisando Pull Request ${num} e impacto arquitetural...`;
+    }
     case "execute_workspace_command": {
       const c = typeof args.command === "string" ? args.command : "";
       return `⚡ Executando comando no workspace: ${c}...`;

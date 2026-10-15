@@ -1216,23 +1216,67 @@ export function analyzeArchitecturalImpact(
     // Checagem de comandos SQL destrutivos
     if (sqlFiles.length > 0) {
       const dropRegex =
-        /^\+\s*(DROP\s+(TABLE|COLUMN|DATABASE|INDEX|VIEW|SCHEMA)|TRUNCATE\s+TABLE|ALTER\s+TABLE\s+.*\s+DROP\s+)/im;
+        /^\+\s*(DROP\s+(TABLE|COLUMN|DATABASE|INDEX|VIEW|SCHEMA|TYPE|SEQUENCE)|TRUNCATE\s+(TABLE\s+)?[a-z0-9_]+|ALTER\s+TABLE\s+.*\s+DROP\s+)/im;
       if (dropRegex.test(diff)) {
         sqlDestructive = true;
       }
     }
 
-    // Extração de pacotes novos ou alterados em package.json
-    if (dependencyFiles.some((f) => f.includes("package.json"))) {
-      const depRegex = /^\+\s*"([^"@\s]+)"\s*:\s*"([^"]+)"/gm;
-      let match: RegExpExecArray | null;
-      while ((match = depRegex.exec(diff)) !== null) {
-        const pkgName = match[1];
-        const pkgVer = match[2];
-        if (!pkgName.startsWith("$") && !pkgName.startsWith("//")) {
-          const entry = `${pkgName} (${pkgVer})`;
-          if (!dependencyDetails.includes(entry)) {
-            dependencyDetails.push(entry);
+    // Extração precisa de pacotes novos ou alterados especificamente em package.json
+    if (dependencyFiles.some((f) => /(^|\/)package\.json$/i.test(f))) {
+      const fileBlocks = diff.split(/(?=^diff --git )/m);
+      const ignoredMetadataKeys = new Set([
+        "name",
+        "version",
+        "description",
+        "main",
+        "module",
+        "types",
+        "typings",
+        "type",
+        "exports",
+        "files",
+        "author",
+        "authors",
+        "license",
+        "licenses",
+        "repository",
+        "homepage",
+        "bugs",
+        "keywords",
+        "private",
+        "engines",
+        "packagemanager",
+        "bin",
+        "workspaces",
+        "publishconfig",
+        "scripts",
+        "config",
+      ]);
+      const isVersionSpec = (val: string) =>
+        /^[\^~>=<*]|\d+\.\d+|^(latest|beta|next|alpha|rc)|^(npm|workspace|catalog|file|git|github|http):/i.test(
+          val.trim()
+        );
+
+      for (const block of fileBlocks) {
+        const headerMatch = block.match(/^diff --git a\/(\S+) b\/(\S+)/m);
+        const filePath = headerMatch ? headerMatch[1] : "";
+        if (/(^|\/)package\.json$/i.test(filePath)) {
+          const depRegex =
+            /^\+\s*"(@?[a-z0-9_.-]+(?:\/[a-z0-9_.-]+)?)"\s*:\s*"([^"]+)"/gim;
+          let match: RegExpExecArray | null;
+          while ((match = depRegex.exec(block)) !== null) {
+            const pkgName = match[1];
+            const pkgVer = match[2];
+            if (
+              !ignoredMetadataKeys.has(pkgName.toLowerCase()) &&
+              isVersionSpec(pkgVer)
+            ) {
+              const entry = `${pkgName} (${pkgVer})`;
+              if (!dependencyDetails.includes(entry)) {
+                dependencyDetails.push(entry);
+              }
+            }
           }
         }
       }
@@ -1404,16 +1448,36 @@ export function summarizeDiffIntelligently(diff: string, maxChars: number = 8000
     }
   }
 
-  // Em seguida inclui arquivos normais de forma compactada (cabeçalhos + hunks)
+  // Em seguida inclui arquivos normais de forma compactada ou amostrada dentro do orçamento
   let compactedFilesCount = 0;
   for (const block of normalBlocks) {
     const headerMatch = block.match(/^diff --git a\/(\S+) b\/(\S+)/m);
     const fileName = headerMatch ? headerMatch[1] : "arquivo";
 
-    const hunks = block.match(/^@@\s+[^@]+@@.*$/gm) || [];
-    const compactSummary = `diff --git a/${fileName} b/${fileName}\n${hunks
-      .slice(0, 3)
-      .join("\n")}\n  [...conteúdo do diff omitido para concisão...]\n`;
+    // Se o arquivo normal cabe por inteiro no orçamento restante, inclui completo
+    if (currentLength + block.length <= budget) {
+      resultBlocks.push(block);
+      currentLength += block.length;
+      continue;
+    }
+
+    // Se não cabe completo, inclui os cabeçalhos e uma amostra das primeiras alterações significativas
+    const lines = block.split("\n");
+    const sampleLines: string[] = [];
+    sampleLines.push(`diff --git a/${fileName} b/${fileName}`);
+
+    let changeLinesCount = 0;
+    for (const l of lines) {
+      if (l.startsWith("@@") || l.startsWith("+") || l.startsWith("-")) {
+        sampleLines.push(l);
+        if (l.startsWith("+") || l.startsWith("-")) {
+          changeLinesCount++;
+          if (changeLinesCount >= 12) break;
+        }
+      }
+    }
+    sampleLines.push("  [...restante do diff do arquivo omitido para concisão...]");
+    const compactSummary = sampleLines.join("\n") + "\n";
 
     if (currentLength + compactSummary.length <= budget) {
       resultBlocks.push(compactSummary);
@@ -1473,15 +1537,25 @@ export function buildPullRequestExecutiveSummary(
     .replace(/>\s*\*Pull Request criado por Benito\.\*/g, "")
     .trim();
 
-  // Detecção de issue relacionada
+  // Detecção de issue vinculada (body, commits, branch, título)
+  const commitMessages = (pr.commits || [])
+    .map((c) => `${c.messageHeadline} ${c.messageBody || ""}`)
+    .join(" ");
+  const combinedSearchText = `${cleanBody} ${pr.title} ${
+    pr.headRefName || ""
+  } ${commitMessages}`;
+
   const issueMatch =
-    cleanBody.match(
-      /(?:(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved|issue|issues)\s*#(\d+))/i
-    ) || pr.title.match(/(?:#(\d+)|issue-(\d+))/i);
+    combinedSearchText.match(
+      /(?:(?:close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved|issue|issues)[\s/:-]*#?(\d+))/i
+    ) || combinedSearchText.match(/(?:#(\d+)|(?:issue|fix|feat)[\/-](\d+))/i);
   const relatedIssue = issueMatch ? issueMatch[1] || issueMatch[2] : undefined;
   if (relatedIssue) {
     lines.push(`- **Issue Vinculada**: #${relatedIssue}`);
   }
+
+  const genericHeaders =
+    /^(?:o que foi implementado|descri[cç][aã]o|contexto|resumo|summary|overview|mudan[cç]as|altera[cç][oõ]es)/i;
 
   if (cleanBody) {
     const bodyParagraphs = cleanBody
@@ -1496,7 +1570,31 @@ export function buildPullRequestExecutiveSummary(
         }`
       );
     } else {
-      lines.push(`Entrega focada em: ${pr.title}`);
+      const rawBlocks = cleanBody
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 15 && !p.startsWith("---"));
+
+      const firstContentBlock = rawBlocks.find((b) => {
+        const firstLine = b
+          .split("\n")[0]
+          .replace(/^#+\s*/, "")
+          .replace(/^[^\p{L}\p{N}]+/u, "")
+          .trim();
+        return !genericHeaders.test(firstLine);
+      });
+
+      if (firstContentBlock) {
+        const cleanBlock = firstContentBlock
+          .split("\n")
+          .map((l) => (l.startsWith("#") ? `**${l.replace(/^#+\s*/, "")}**` : l))
+          .join("\n");
+        lines.push(
+          `${cleanBlock.slice(0, 400)}${cleanBlock.length > 400 ? "..." : ""}`
+        );
+      } else {
+        lines.push(`Entrega focada em: ${pr.title}`);
+      }
     }
   } else {
     lines.push(`Entrega focada em: ${pr.title}`);
@@ -1616,11 +1714,44 @@ export function buildPullRequestExecutiveSummary(
 
   // 5. Notas de Release Sugeridas
   lines.push("### 📝 Notas de Release Sugeridas");
-  lines.push(
-    `- **${pr.title}**: ${
-      cleanBody ? cleanBody.split("\n")[0].slice(0, 150) : "Atualização aplicada com sucesso."
-    }`
-  );
+  let releaseNoteDesc = "Atualização aplicada com sucesso.";
+  if (cleanBody) {
+    const rawLines = cleanBody
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith("---"));
+
+    const genericHeaders =
+      /^(?:o que foi implementado|descri[cç][aã]o|contexto|resumo|summary|overview|mudan[cç]as|altera[cç][oõ]es)/i;
+    const descriptiveLine = rawLines.find((l) => {
+      const normalized = l
+        .replace(/^#+\s*/, "")
+        .replace(/^[^\p{L}\p{N}]+/u, "")
+        .trim();
+      return (
+        normalized.length > 5 &&
+        !genericHeaders.test(normalized) &&
+        !l.startsWith("![")
+      );
+    });
+
+    if (descriptiveLine) {
+      releaseNoteDesc = descriptiveLine
+        .replace(/^#+\s*/, "")
+        .replace(/^[-*]\s*/, "")
+        .slice(0, 200);
+    }
+  }
+  lines.push(`- **${pr.title}**: ${releaseNoteDesc}`);
+
+  // 6. Amostra do Diff Crítico (quando fornecido via includeDiff)
+  if (diffSummary && diffSummary.trim().length > 0) {
+    lines.push("");
+    lines.push("### 🔍 Amostra do Diff Crítico");
+    lines.push("```diff");
+    lines.push(diffSummary.trim());
+    lines.push("```");
+  }
 
   return lines.join("\n");
 }
