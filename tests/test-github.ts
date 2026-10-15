@@ -406,6 +406,53 @@ async function runGitHubTests() {
     }
   }
 
+  // 2.1 Testando fallback resiliente para erro de labels inexistentes em createIssue e createPullRequest
+  console.log("\n2.1 Testando resiliência a labels inexistentes (fallback sem --label)...");
+  class FallbackTestGitHubService extends GitHubService {
+    public calls: string[][] = [];
+
+    protected override async execGh(args: string[]): Promise<{ stdout: string }> {
+      this.calls.push(args);
+      // Se tiver flag --label, simula erro do GitHub de label inexistente
+      if (args.includes("--label")) {
+        throw new Error("could not add label: 'benito-pr' not found");
+      }
+      // Se não tiver --label (segunda chamada / fallback), retorna sucesso
+      if (args[0] === "issue") {
+        return { stdout: "https://github.com/ri-favaro/BenitoAgentePessoal/issues/105\n" };
+      }
+      return { stdout: "https://github.com/ri-favaro/BenitoAgentePessoal/pull/105\n" };
+    }
+  }
+
+  const fallbackService = new FallbackTestGitHubService();
+
+  // Teste em createIssue
+  const issueFallbackRes = await fallbackService.createIssue({
+    title: "feat: nova funcionalidade com label",
+    body: "Corpo da issue",
+    labels: ["label-inexistente"],
+  });
+  assert.strictEqual(issueFallbackRes.success, true);
+  assert.strictEqual(issueFallbackRes.issueNumber, 105);
+  assert.strictEqual(fallbackService.calls.length, 2, "Deve tentar com label e depois fallback sem label");
+  assert.ok(fallbackService.calls[0].includes("--label"), "Primeira chamada deve conter --label");
+  assert.ok(!fallbackService.calls[1].includes("--label"), "Segunda chamada não deve conter --label");
+
+  // Limpa chamadas e testa em createPullRequest
+  fallbackService.calls = [];
+  const prFallbackRes = await fallbackService.createPullRequest({
+    title: "feat: novo PR com label",
+    body: "Corpo do PR",
+    labels: ["label-inexistente"],
+  });
+  assert.strictEqual(prFallbackRes.success, true);
+  assert.strictEqual(prFallbackRes.prNumber, 105);
+  assert.strictEqual(fallbackService.calls.length, 2, "Deve tentar com label e depois fallback sem label");
+  assert.ok(fallbackService.calls[0].includes("--label"), "Primeira chamada de PR deve conter --label");
+  assert.ok(!fallbackService.calls[1].includes("--label"), "Segunda chamada de PR não deve conter --label");
+  console.log("✔ Fallback resiliente sem labels validado com sucesso para issues e PRs!");
+
   const mockService = new MockGitHubService();
 
   // ==========================================

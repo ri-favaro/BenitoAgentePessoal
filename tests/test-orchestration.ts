@@ -1,10 +1,12 @@
 import path from "node:path";
+import assert from "node:assert";
 import pc from "picocolors";
 import { TerminalRunner } from "../src/orchestration/terminal-runner.js";
 import { TaskPacker } from "../src/orchestration/task-packer.js";
 import { CodingOrchestrator } from "../src/orchestration/coding-orchestrator.js";
 import { createOrchestrationTools } from "../src/tools/orchestration-tools.js";
 import { GitHubService, type GitHubIssueDetail } from "../src/core/github-service.js";
+import { config } from "../src/config.js";
 
 async function runOrchestrationTests() {
   console.log(pc.cyan("\n=== TESTES DO SISTEMA DE ORQUESTRAÇÃO & CODING RUNNER (ISSUE #21) ===\n"));
@@ -20,9 +22,14 @@ async function runOrchestrationTests() {
   const runner = new TerminalRunner({
     projectRoot,
     allowedPaths,
-    allowedCommands: ["agy", "npm", "npx", "git", "node"],
+    allowedCommands: ["agy", "npm", "npx", "git", "node", "gh"],
     timeoutMs: 5000,
   });
+
+  assert.ok(
+    config.orchestration.allowedCommands.includes("gh"),
+    "A configuração padrão de comandos permitidos deve incluir 'gh'"
+  );
 
   // 1.1 Bloqueio de diretório fora da sandbox
   const forbiddenDir = path.resolve("C:\\Windows\\System32");

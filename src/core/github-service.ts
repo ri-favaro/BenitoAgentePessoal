@@ -280,6 +280,20 @@ export class GitHubService {
   }
 
   /**
+   * Executa comandos do GitHub CLI (`gh`) de forma centralizada.
+   * Permite extensão/mock em testes unitários.
+   */
+  protected async execGh(
+    args: string[],
+    options: { cwd?: string } = {}
+  ): Promise<{ stdout: string; stderr?: string }> {
+    return execFileAsync("gh", args, {
+      cwd: options.cwd || this.projectRoot,
+      windowsHide: true,
+    });
+  }
+
+  /**
    * Prepara os metadados da issue aplicando o rodapé padrão e a label de identificação autônoma.
    */
   prepareIssuePayload(options: CreateIssueOptions): {
@@ -359,10 +373,32 @@ export class GitHubService {
         args.push("--repo", payload.repo);
       }
 
-      const { stdout } = await execFileAsync("gh", args, {
-        cwd: this.projectRoot,
-        windowsHide: true,
-      });
+      let stdout: string;
+      try {
+        const res = await this.execGh(args);
+        stdout = res.stdout;
+      } catch (execError: any) {
+        const errMsg = execError?.message || String(execError);
+        const isLabelError =
+          errMsg.toLowerCase().includes("could not add label") ||
+          (errMsg.toLowerCase().includes("label") && errMsg.toLowerCase().includes("not found"));
+
+        if (isLabelError && payload.labels.length > 0) {
+          // Fallback resiliente: remove flags --label e tenta novamente para não travar a criação da issue
+          const fallbackArgs: string[] = [];
+          for (let i = 0; i < args.length; i++) {
+            if (args[i] === "--label") {
+              i++; // pula a flag e o valor da label
+            } else {
+              fallbackArgs.push(args[i]);
+            }
+          }
+          const fallbackRes = await this.execGh(fallbackArgs);
+          stdout = fallbackRes.stdout;
+        } else {
+          throw execError;
+        }
+      }
 
       const url = stdout.trim();
       // Tenta extrair o número da issue a partir da URL gerada
@@ -429,10 +465,32 @@ export class GitHubService {
         args.push("--repo", payload.repo);
       }
 
-      const { stdout } = await execFileAsync("gh", args, {
-        cwd: this.projectRoot,
-        windowsHide: true,
-      });
+      let stdout: string;
+      try {
+        const res = await this.execGh(args);
+        stdout = res.stdout;
+      } catch (execError: any) {
+        const errMsg = execError?.message || String(execError);
+        const isLabelError =
+          errMsg.toLowerCase().includes("could not add label") ||
+          (errMsg.toLowerCase().includes("label") && errMsg.toLowerCase().includes("not found"));
+
+        if (isLabelError && payload.labels.length > 0) {
+          // Fallback resiliente: remove flags --label e tenta novamente para não travar a abertura do PR
+          const fallbackArgs: string[] = [];
+          for (let i = 0; i < args.length; i++) {
+            if (args[i] === "--label") {
+              i++; // pula a flag e o valor da label
+            } else {
+              fallbackArgs.push(args[i]);
+            }
+          }
+          const fallbackRes = await this.execGh(fallbackArgs);
+          stdout = fallbackRes.stdout;
+        } else {
+          throw execError;
+        }
+      }
 
       const url = stdout.trim();
       const matchNumber = url.match(/\/pull\/(\d+)$/);

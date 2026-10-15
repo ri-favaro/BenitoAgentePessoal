@@ -168,7 +168,7 @@ Ao manter ou evoluir recursos em `src/orchestration/` e `src/tools/orchestration
    - O Benito opera com janela de 24k tokens no Qwen 9B local para especificação, supervisão e RAG sem ser sobrecarregado por arquivos gigantes.
    - O agente de coding (**AGY CLI**) roda em processo isolado (`agy --prompt "..." --dangerously-skip-permissions`), carregando árvores inteiras de código e executando lint/diff de forma autônoma sem travar no terminal pedindo confirmações.
 2. **Defesa em Profundidade & Sandbox (`TerminalRunner`):**
-   - **Whitelist de Comandos:** Apenas executáveis permitidos (`agy`, `npm`, `npx`, `git`, `node`) podem ser executados pelo runner. Qualquer outro binário é bloqueado.
+   - **Whitelist de Comandos:** Apenas executáveis permitidos (`agy`, `npm`, `npx`, `git`, `node`, `gh`) podem ser executados pelo runner. Qualquer outro binário é bloqueado.
    - **Sandbox de CWD:** O diretório de execução deve ser validado via `validateAllowedPath` contra `ALLOWED_DIRECTORIES`.
    - **Controle de Timeout:** Comandos possuem tempo limite configurado (padrão 5 minutos / 300.000 ms) com abort gracioso para prevenir travamentos de terminal.
 3. **Módulo de Context Packing (`TaskPacker`):**
