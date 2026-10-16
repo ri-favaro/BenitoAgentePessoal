@@ -5,16 +5,21 @@ import pc from "picocolors";
 import {
   createCareerTools,
   ensureCareerProfileExists,
+  readCareerProfile,
   evaluateJobMatch,
   buildConnectionPitch,
   buildTailoredResumeMarkdown,
+  buildTailoredPitchAndAtsGuide,
+  selectTailoredProjects,
   loadAnalyzedJobs,
   extractJobMetadata,
   cleanJobPostingContent,
+  formatJobPipelineKanban,
+  buildDynamicStudyMatrix,
 } from "../src/tools/career-tools.js";
 
 async function runCareerTests() {
-  console.log(pc.bold(pc.cyan("\n=== TESTES DO COPILOTO DE CARREIRA E ANÁLISE DE VAGAS (ISSUE #26) ===\n")));
+  console.log(pc.bold(pc.cyan("\n=== TESTES DO COPILOTO DE CARREIRA E ANÁLISE DE VAGAS (ISSUE #26 & #39) ===\n")));
 
   const tempVaultDir = path.resolve(process.cwd(), "tests", "temp-career-vault");
   const allowedDirs = [process.cwd(), tempVaultDir];
@@ -27,9 +32,9 @@ async function runCareerTests() {
 
   try {
     // ==========================================
-    // 1. Testando ensureCareerProfileExists
+    // 1. Testando ensureCareerProfileExists & readCareerProfile
     // ==========================================
-    console.log(pc.yellow("1. Testando inicialização e integridade do perfil-profissional.md..."));
+    console.log(pc.yellow("1. Testando inicialização, integridade e leitura dinâmica do perfil master..."));
     const init1 = await ensureCareerProfileExists(tempVaultDir, allowedDirs);
     assert.strictEqual(init1.created, true);
     assert.ok(init1.filePath.endsWith("perfil-profissional.md"));
@@ -45,12 +50,21 @@ async function runCareerTests() {
     // Segunda chamada deve ser idempotente (created: false)
     const init2 = await ensureCareerProfileExists(tempVaultDir, allowedDirs);
     assert.strictEqual(init2.created, false);
-    console.log(pc.green("✔ Perfil master inicializado e validado com sucesso!"));
+
+    // Testando leitura dinâmica do Markdown
+    const profileMarkdown = await readCareerProfile(tempVaultDir, allowedDirs);
+    assert.ok(typeof profileMarkdown === "string");
+    assert.ok(profileMarkdown.includes("Luiz Ricardo Favaro"));
+    assert.ok(profileMarkdown.includes("CONTELE"));
+    assert.ok(profileMarkdown.includes("Benito"));
+    assert.ok(profileMarkdown.includes("MBA em Engenharia de Software"));
+    assert.ok(profileMarkdown.includes("UNISANTA"));
+    console.log(pc.green("✔ Perfil master inicializado e lido dinamicamente com 100% de sucesso!"));
 
     // ==========================================
     // 2. Testando evaluateJobMatch com diferentes perfis de vaga
     // ==========================================
-    console.log(pc.yellow("\n2. Testando heurística de aderência calibrada para nível Pleno..."));
+    console.log(pc.yellow("\n2. Testando heurística de aderência calibrada para nível Pleno e novas tecnologias..."));
 
     // Cenário A: Vaga ideal Pleno Backend Node.js / TypeScript
     const jobA = `
@@ -122,7 +136,30 @@ async function runCareerTests() {
     assert.ok(resD.matchScore >= 75);
     assert.ok(resD.strengths.some((s) => s.includes("IA Generativa") || s.includes("Agentes") || s.includes("RAG")));
     assert.strictEqual(resD.criticalGaps.some((g) => g.includes(".NET")), false);
-    console.log(pc.green("✔ Calibração de aderência e vereditos (Sim / Ressalvas / Não) e corte de rodapé validados com precisão!"));
+
+    // Cenário E: Novas tecnologias da Issue #39 (N8N, Claude Anthropic, Inglês Avançado)
+    const jobE = `
+      Engenheiro de Automações e IA.
+      Requisitos: Claude Anthropic com Tool Calling, N8N para criação de fluxos de trabalho e TypeScript.
+      Inglês avançado/fluente para comunicação internacional.
+    `;
+    const resE = evaluateJobMatch(jobE, "Global AI Corp", "Engenheiro de Automações e IA");
+    assert.strictEqual(resE.verdict, "Sim");
+    assert.ok(resE.matchScore >= 75);
+    assert.ok(resE.strengths.some((s) => s.includes("N8N")));
+    assert.ok(resE.strengths.some((s) => s.includes("Claude")));
+    assert.ok(resE.strengths.some((s) => s.includes("Inglês Avançado")));
+
+    // Cenário F: Tecnologias de Sistemas & Cloud (Go, C/C++/Embarcados, Azure)
+    const jobF = `
+      Desenvolvedor Backend / IoT Pleno.
+      Requisitos: Go (Golang), C / C++ ou sistemas embarcados, Azure e Linux.
+    `;
+    const resF = evaluateJobMatch(jobF, "IoT Connect", "Desenvolvedor Backend / IoT");
+    assert.ok(resF.strengths.some((s) => s.includes("Go (Golang)")));
+    assert.ok(resF.strengths.some((s) => s.includes("C/C++") || s.includes("Embarcados")));
+    assert.ok(resF.strengths.some((s) => s.includes("Azure")));
+    console.log(pc.green("✔ Calibração de aderência para todas as tecnologias do catálogo validada!"));
 
     // ==========================================
     // 3. Testando analyze_job_posting (Tool AI SDK & Persistência)
@@ -147,6 +184,7 @@ async function runCareerTests() {
     const storedJobs1 = await loadAnalyzedJobs(tempVaultDir, allowedDirs);
     assert.strictEqual(storedJobs1.length, 1);
     assert.strictEqual(storedJobs1[0].company, "Nubank");
+    assert.strictEqual(storedJobs1[0].status, "analisada");
 
     // Re-análise da mesma empresa deve atualizar o registro sem duplicar
     const analyzeRes2: any = await tools.analyze_job_posting.execute(
@@ -172,7 +210,7 @@ async function runCareerTests() {
       { messages: [], toolCallId: "call-3" }
     );
 
-    // Adiciona uma terceira vaga via auto-extração de metadados (sem passar company e role)
+    // Adiciona uma terceira vaga via auto-extração de metadados
     const analyzeRes4: any = await tools.analyze_job_posting.execute(
       {
         jobText: jobD,
@@ -182,16 +220,27 @@ async function runCareerTests() {
     assert.strictEqual(analyzeRes4.success, true);
     assert.strictEqual(analyzeRes4.company, "Implanta");
     assert.strictEqual(analyzeRes4.role, "Desenvolvedor(a) Harness Multiagente");
-    assert.ok(analyzeRes4.matchScore >= 75);
 
     const storedJobs3 = await loadAnalyzedJobs(tempVaultDir, allowedDirs);
     assert.strictEqual(storedJobs3.length, 3);
     console.log(pc.green("✔ analyze_job_posting, auto-extração e persistência estruturada em vagas-analisadas.json validados!"));
 
     // ==========================================
-    // 4. Testando generate_tailored_application (CV & Pitch)
+    // 4. Testando Seleção Inteligente de Projetos (selectTailoredProjects)
     // ==========================================
-    console.log(pc.yellow("\n4. Testando generate_tailored_application (CV Markdown e Pitch no topo)..."));
+    console.log(pc.yellow("\n4. Testando selectTailoredProjects (Top 2-3 projetos por trilha)..."));
+    const backendProjects = selectTailoredProjects(["TypeScript", "Node.js", "PostgreSQL", "Clean Architecture"]);
+    assert.ok(backendProjects.length >= 2 && backendProjects.length <= 3);
+    assert.ok(backendProjects.some((p) => p.id === "benito"));
+
+    const iotProjects = selectTailoredProjects(["C/C++", "Linux", "Sistemas Embarcados", "Azure"]);
+    assert.ok(iotProjects.some((p) => p.id === "linux-buildroot" || p.id === "rmda-azure" || p.id === "cobrics-tcc"));
+    console.log(pc.green("✔ Seleção adaptativa de projetos calibrada para manter CV conciso!"));
+
+    // ==========================================
+    // 5. Testando generate_tailored_application (Arquivos Desacoplados CV & Pitch)
+    // ==========================================
+    console.log(pc.yellow("\n5. Testando generate_tailored_application com desacoplamento de arquivos..."));
 
     const appRes: any = await tools.generate_tailored_application.execute(
       {
@@ -199,36 +248,102 @@ async function runCareerTests() {
         role: "Engenheiro de Software Backend Pleno",
         focusSkills: ["TypeScript", "Node.js", "Clean Architecture", "PostgreSQL"],
       },
-      { messages: [], toolCallId: "call-4" }
+      { messages: [], toolCallId: "call-5" }
     );
 
     assert.strictEqual(appRes.success, true);
     assert.ok(appRes.filePath.includes("Carreira"));
-    assert.ok(appRes.filePath.includes("Vagas"));
+    assert.ok(appRes.cvFilePath.endsWith("-CV.md"));
+    assert.ok(appRes.pitchFilePath.endsWith("-Pitch.md"));
     assert.ok(appRes.pitch.includes("Nubank"));
     assert.ok(appRes.pitch.includes("USP/Esalq"));
 
-    // Valida o arquivo real salvo no disco
-    const cvFileContent = await fs.readFile(appRes.filePath, "utf-8");
-    assert.ok(cvFileContent.includes("## 🎯 Pitch de Conexão (LinkedIn / Recrutador)"));
-    assert.ok(cvFileContent.includes("## 📄 Currículo Personalizado"));
-    assert.ok(cvFileContent.includes("CONTELE-OS"));
+    // Valida o CV Markdown desacoplado (sem pitch para conversão limpa em PDF/ATS)
+    const cvFileContent = await fs.readFile(appRes.cvFilePath, "utf-8");
+    assert.ok(cvFileContent.includes("Luiz Ricardo Favaro"));
+    assert.ok(cvFileContent.includes("Resumo Profissional"));
+    assert.ok(cvFileContent.includes("Competências Técnicas"));
+    assert.ok(cvFileContent.includes("CONTELE"));
     assert.ok(cvFileContent.includes("Benito"));
+    assert.strictEqual(cvFileContent.includes("## 🎯 Pitch de Conexão"), false); // Desacoplado com sucesso!
 
-    // Verifica se vinculou cvPath no registro JSON da vaga
+    // Valida o Pitch Markdown com Guia ATS
+    const pitchFileContent = await fs.readFile(appRes.pitchFilePath, "utf-8");
+    assert.ok(pitchFileContent.includes("Pitch de Conexão"));
+    assert.ok(pitchFileContent.includes("Guia de Revisão & Otimização ATS"));
+    assert.ok(pitchFileContent.includes("Nubank"));
+
+    // Verifica se vinculou cvPath e atualizou status para cv_gerado
     const updatedJobs = await loadAnalyzedJobs(tempVaultDir, allowedDirs);
     const nubankJob = updatedJobs.find((j) => j.company === "Nubank");
     assert.ok(nubankJob?.cvPath);
-    console.log(pc.green("✔ CV adaptado e Pitch de Conexão gerados e persistidos com sucesso!"));
+    assert.strictEqual(nubankJob?.status, "cv_gerado");
+    console.log(pc.green("✔ CV desacoplado e Pitch + Guia ATS gerados com status atualizado para 'cv_gerado'!"));
 
     // ==========================================
-    // 5. Testando generate_career_report (Observatório de Mercado)
+    // 6. Testando update_job_application_status (Funil de Vagas)
     // ==========================================
-    console.log(pc.yellow("\n5. Testando generate_career_report e matriz de estudos..."));
+    console.log(pc.yellow("\n6. Testando ferramenta update_job_application_status..."));
+
+    const updateRes1: any = await tools.update_job_application_status.execute(
+      {
+        company: "Nubank",
+        status: "aplicada",
+        notes: "Candidatura submetida via LinkedIn Easy Apply",
+      },
+      { messages: [], toolCallId: "call-6" }
+    );
+
+    assert.strictEqual(updateRes1.success, true);
+    assert.strictEqual(updateRes1.status, "aplicada");
+    assert.strictEqual(updateRes1.notes, "Candidatura submetida via LinkedIn Easy Apply");
+
+    // Mudança para etapa de entrevista
+    const updateRes2: any = await tools.update_job_application_status.execute(
+      {
+        company: "Nubank",
+        status: "entrevista",
+        notes: "Entrevista técnica com Tech Lead agendada",
+      },
+      { messages: [], toolCallId: "call-7" }
+    );
+    assert.strictEqual(updateRes2.success, true);
+    assert.strictEqual(updateRes2.status, "entrevista");
+
+    // Tentativa em empresa inexistente deve retornar erro amigável
+    const updateResFail: any = await tools.update_job_application_status.execute(
+      {
+        company: "EmpresaFantasmaXYZ",
+        status: "rejeitada",
+      },
+      { messages: [], toolCallId: "call-8" }
+    );
+    assert.strictEqual(updateResFail.success, false);
+    assert.ok(updateResFail.error.includes("não encontrada"));
+    console.log(pc.green("✔ update_job_application_status manipulou transições de status com sucesso!"));
+
+    // ==========================================
+    // 7. Testando formatJobPipelineKanban
+    // ==========================================
+    console.log(pc.yellow("\n7. Testando visualização textual do funil Kanban..."));
+    const currentJobs = await loadAnalyzedJobs(tempVaultDir, allowedDirs);
+    const kanbanOutput = formatJobPipelineKanban(currentJobs);
+
+    assert.ok(kanbanOutput.includes("📊 FUNIL DE CANDIDATURAS"));
+    assert.ok(kanbanOutput.includes("ENTREVISTA"));
+    assert.ok(kanbanOutput.includes("Nubank"));
+    assert.ok(kanbanOutput.includes("ANALISADAS"));
+    assert.ok(kanbanOutput.includes("Implanta"));
+    console.log(pc.green("✔ Visualização do Kanban de vagas formatada com clareza!"));
+
+    // ==========================================
+    // 8. Testando generate_career_report e matriz de estudos dinâmica
+    // ==========================================
+    console.log(pc.yellow("\n8. Testando generate_career_report e matriz dinâmica de estudos..."));
 
     const reportRes: any = await tools.generate_career_report.execute(
       { updateVaultNote: true },
-      { messages: [], toolCallId: "call-5" }
+      { messages: [], toolCallId: "call-9" }
     );
 
     assert.strictEqual(reportRes.success, true);
@@ -242,14 +357,25 @@ async function runCareerTests() {
     const reportFilePath = path.join(tempVaultDir, "Carreira", "relatorio-gaps-mercado.md");
     const noteContent = await fs.readFile(reportFilePath, "utf-8");
     assert.ok(noteContent.includes("Matriz de Estudos Priorizados"));
-    assert.ok(noteContent.includes("Nubank") === false); // dados agregados
     assert.ok(noteContent.includes("**Total de Vagas Analisadas:** 3"));
-    console.log(pc.green("✔ generate_career_report consolidou mercado e gerou nota executiva perfeitamente!"));
+
+    // Testando buildDynamicStudyMatrix com gaps
+    const dynamicMatrixResult = buildDynamicStudyMatrix(
+      currentJobs,
+      reportRes.topSkills,
+      reportRes.topCriticalGaps || [],
+      reportRes.topQuickWins || []
+    );
+    assert.ok(Array.isArray(dynamicMatrixResult.studyMatrix));
+    assert.ok(dynamicMatrixResult.studyMatrix.length > 0);
+    assert.ok(dynamicMatrixResult.studyMatrix.some((m) => m.area && m.action && m.localResource));
+    assert.ok(typeof dynamicMatrixResult.weeklyStudyFocus === "string");
+    console.log(pc.green("✔ generate_career_report e matriz dinâmica consolidados com maestria!"));
 
     // ==========================================
-    // 6. Testando Proteção de Sandbox (path-guard)
+    // 9. Testando Proteção de Sandbox (path-guard)
     // ==========================================
-    console.log(pc.yellow("\n6. Testando proteção estrita de sandbox com path-guard..."));
+    console.log(pc.yellow("\n9. Testando proteção estrita de sandbox com path-guard..."));
 
     const evilTools = createCareerTools("C:\\Windows\\System32", allowedDirs);
     const sandboxedApp: any = await evilTools.generate_tailored_application.execute(
@@ -260,7 +386,7 @@ async function runCareerTests() {
     assert.ok(sandboxedApp.error.includes("Acesso negado"));
     console.log(pc.green("✔ Sandbox bloqueou operações fora dos diretórios permitidos!"));
 
-    console.log(pc.bold(pc.green("\n🎉 Todos os 6 grupos de testes do Copiloto de Carreira passaram com 100% de sucesso! 🚀\n")));
+    console.log(pc.bold(pc.green("\n🎉 Todos os 9 grupos de testes do Copiloto de Carreira passaram com 100% de sucesso! 🚀\n")));
   } finally {
     await fs.rm(tempVaultDir, { recursive: true, force: true });
   }

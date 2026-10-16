@@ -162,6 +162,11 @@ export function formatToolFeedback(
     case "generate_career_report": {
       return `📊 Consolidando gaps de mercado e observatório de carreira...`;
     }
+    case "update_job_application_status": {
+      const comp = typeof args.company === "string" ? args.company : (typeof args.jobId === "string" ? args.jobId : "vaga");
+      const st = typeof args.status === "string" ? args.status.toUpperCase() : "status";
+      return `💼 Atualizando status da candidatura [${comp}] para ${st}...`;
+    }
     default:
       return `⚙️ Executando: ${toolName}...`;
   }
