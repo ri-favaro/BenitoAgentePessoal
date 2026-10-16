@@ -11,7 +11,12 @@ import { VectorStore } from "./core/vector-store.js";
 import { GitHubService } from "./core/github-service.js";
 import { executeDailyNewsDigest } from "./automation/index.js";
 import { createObsidianTools } from "./tools/obsidian-tools.js";
-import { createCareerTools, loadAnalyzedJobs } from "./tools/career-tools.js";
+import {
+  createCareerTools,
+  loadAnalyzedJobs,
+  formatJobPipelineKanban,
+  type JobApplicationStatus,
+} from "./tools/career-tools.js";
 
 async function readInputWithPasteSupport(
   rl: readline.Interface,
@@ -459,23 +464,45 @@ async function main() {
 
       if (trimmed === "/carreira" || trimmed.startsWith("/carreira ")) {
         const sub = trimmed.replace("/carreira", "").trim().toLowerCase();
-        if (sub === "vagas" || sub === "listar") {
+        if (sub.startsWith("status ")) {
+          const rawArgs = trimmed.replace(/^\/carreira\s+status\s+/i, "").trim();
+          const parts = rawArgs.split(/\s+/);
+          if (parts.length < 2) {
+            console.log(pc.yellow("\nUso: /carreira status <empresa_ou_id> <novo_status>\nStatus válidos: analisada, cv_gerado, aplicada, entrevista, rejeitada, oferta\nExemplo: /carreira status Implanta aplicada\n"));
+          } else {
+            const newStatus = parts[parts.length - 1].toLowerCase() as JobApplicationStatus;
+            const targetCompany = parts.slice(0, -1).join(" ");
+            const validStatuses = ["analisada", "cv_gerado", "aplicada", "entrevista", "rejeitada", "oferta"];
+            if (!validStatuses.includes(newStatus)) {
+              console.log(pc.red(`\nStatus inválido: '${newStatus}'. Use um dos seguintes: ${validStatuses.join(", ")}\n`));
+            } else {
+              console.log(pc.cyan(`\n[💼 Atualizando status da candidatura para '${targetCompany}'...]`));
+              try {
+                const res: any = await (careerTools.update_job_application_status as any).execute({
+                  company: targetCompany,
+                  status: newStatus,
+                });
+                if (res.success) {
+                  console.log(pc.green(`\n✔ ${res.message}\n`));
+                } else {
+                  console.log(pc.red(`\n✖ ${res.error}\n`));
+                }
+              } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                console.log(pc.red(`\n✖ Erro ao atualizar status: ${msg}\n`));
+              }
+            }
+          }
+        } else if (sub === "vagas" || sub === "listar") {
           console.log(pc.cyan("\n[💼 Consultando histórico de vagas analisadas no Obsidian...]"));
           try {
             const jobs = await loadAnalyzedJobs(config.obsidian.vaultPath, config.filesystem.allowedPaths);
             if (jobs.length === 0) {
               console.log(pc.yellow("\nNenhuma vaga analisada encontrada em Carreira/vagas-analisadas.json.\nPeça ao Benito para analisar uma vaga: 'Benito, analise esta vaga: <link ou texto>'.\n"));
             } else {
-              console.log(pc.bold(pc.green(`\n=== 💼 VAGAS ANALISADAS (${jobs.length}) ===\n`)));
-              for (const j of jobs) {
-                const icon = j.verdict === "Sim" ? "🟢" : j.verdict === "Com ressalvas" ? "🟡" : "🔴";
-                console.log(`${icon} ${pc.bold(j.company)} - ${j.role} [${pc.cyan(`${j.matchScore}%`)} - ${pc.bold(j.verdict.toUpperCase())}]`);
-                if (j.url) console.log(pc.dim(`   URL: ${j.url}`));
-                if (j.cvPath) console.log(pc.magenta(`   CV:  ${j.cvPath}`));
-                console.log(pc.gray(`   ${j.verdictReason}`));
-                console.log("");
-              }
-              console.log(pc.cyan("========================================================\n"));
+              console.log(pc.bold(pc.green(`\n=== 💼 FUNIL DE VAGAS & CANDIDATURAS (${jobs.length}) ===\n`)));
+              console.log(formatJobPipelineKanban(jobs));
+              console.log(pc.dim("Dica: Atualize o status com: /carreira status <empresa> <status>\n(Status: analisada, cv_gerado, aplicada, entrevista, rejeitada, oferta)\n"));
             }
           } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -506,10 +533,11 @@ async function main() {
 
       if (trimmed === "/ajuda") {
         console.log(pc.cyan("\nComandos disponíveis:"));
-        console.log(pc.bold("  /hoje         ") + "- Exibe a Daily Note do dia no cofre do Obsidian");
-        console.log(pc.bold("  /tarefas      ") + "- Lista tarefas e checkboxes pendentes (- [ ]) no cofre");
-        console.log(pc.bold("  /carreira     ") + "- Exibe o relatório de gaps de mercado e matriz de estudos");
-        console.log(pc.bold("  /carreira vagas") + "- Lista todas as vagas analisadas com scores e status");
+        console.log(pc.bold("  /hoje          ") + "- Exibe a Daily Note do dia no cofre do Obsidian");
+        console.log(pc.bold("  /tarefas       ") + "- Lista tarefas e checkboxes pendentes (- [ ]) no cofre");
+        console.log(pc.bold("  /carreira      ") + "- Exibe o relatório de gaps de mercado e matriz de estudos");
+        console.log(pc.bold("  /carreira vagas ") + "- Exibe o funil de candidaturas (Kanban) com status");
+        console.log(pc.bold("  /carreira status") + "- Atualiza o status da vaga (/carreira status <empresa> <status>)");
         console.log(pc.bold("  /digest       ") + "- Gera e exibe o Daily News Digest de notícias agora");
         console.log(pc.bold("  /financas     ") + "- Exibe o extrato financeiro e saldo do mês no Obsidian");
         console.log(pc.bold("  /issues       ") + "- Lista as issues abertas no GitHub");
@@ -704,6 +732,12 @@ async function main() {
           } else if (toolName === "generate_career_report") {
             process.stdout.write(
               pc.dim(pc.magenta(`\n[📊 Carreira: gerando observatório de mercado e matriz de gaps]\n${agentName}: `))
+            );
+          } else if (toolName === "update_job_application_status") {
+            const comp = (args as { company?: string; jobId?: string })?.company || (args as { jobId?: string })?.jobId || "vaga";
+            const st = (args as { status?: string })?.status || "status";
+            process.stdout.write(
+              pc.dim(pc.yellow(`\n[💼 Carreira: atualizando status de ${comp} para "${st}"]\n${agentName}: `))
             );
           } else {
             process.stdout.write(

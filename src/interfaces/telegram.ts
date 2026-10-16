@@ -19,7 +19,12 @@ import {
   executeDailyNewsDigest,
 } from "../automation/index.js";
 import { createObsidianTools } from "../tools/obsidian-tools.js";
-import { createCareerTools, loadAnalyzedJobs } from "../tools/career-tools.js";
+import {
+  createCareerTools,
+  loadAnalyzedJobs,
+  formatJobPipelineKanban,
+  type JobApplicationStatus,
+} from "../tools/career-tools.js";
 
 async function main() {
   if (!config.telegram.botToken) {
@@ -490,6 +495,35 @@ async function main() {
       const text = ctx.message?.text || "";
       const args = text.replace(/^\/carreira(@\w+)?/i, "").trim().toLowerCase();
 
+      if (args.startsWith("status ")) {
+        const raw = text.replace(/^\/carreira(@\w+)?\s+status\s+/i, "").trim();
+        const parts = raw.split(/\s+/);
+        if (parts.length < 2) {
+          await ctx.reply(
+            "💼 *Uso:* `/carreira status <empresa_ou_id> <novo_status>`\n\n*Status válidos:* `analisada`, `cv_gerado`, `aplicada`, `entrevista`, `rejeitada`, `oferta`\n*Exemplo:* `/carreira status Implanta aplicada`",
+            { parse_mode: "Markdown" }
+          );
+          return;
+        }
+        const newStatus = parts[parts.length - 1].toLowerCase() as JobApplicationStatus;
+        const targetComp = parts.slice(0, -1).join(" ");
+        const validStatuses = ["analisada", "cv_gerado", "aplicada", "entrevista", "rejeitada", "oferta"];
+        if (!validStatuses.includes(newStatus)) {
+          await ctx.reply(`❌ Status inválido: \`${newStatus}\`. Use: ${validStatuses.join(", ")}`, { parse_mode: "Markdown" });
+          return;
+        }
+        const res: any = await (careerTools.update_job_application_status as any).execute({
+          company: targetComp,
+          status: newStatus,
+        });
+        if (res.success) {
+          await ctx.reply(`✔ *Status atualizado!*\n\n${res.message}`, { parse_mode: "Markdown" });
+        } else {
+          await ctx.reply(`❌ ${res.error}`);
+        }
+        return;
+      }
+
       if (args === "vagas" || args === "listar") {
         const jobs = await loadAnalyzedJobs(config.obsidian.vaultPath, config.filesystem.allowedPaths);
         if (jobs.length === 0) {
@@ -500,16 +534,8 @@ async function main() {
           return;
         }
 
-        let msg = `💼 *Vagas Analisadas (${jobs.length}):*\n\n`;
-        for (const j of jobs) {
-          const icon = j.verdict === "Sim" ? "🟢" : j.verdict === "Com ressalvas" ? "🟡" : "🔴";
-          msg += `${icon} *${j.company}* - ${j.role}\n`;
-          msg += `• *Match:* ${j.matchScore}% | *Veredito:* ${j.verdict.toUpperCase()}\n`;
-          if (j.cvPath) {
-            msg += `• *CV Adaptado:* \`${path.basename(j.cvPath)}\`\n`;
-          }
-          msg += `_${j.verdictReason}_\n\n`;
-        }
+        const kanban = formatJobPipelineKanban(jobs);
+        const msg = `💼 *Funil de Candidaturas (${jobs.length}):*\n\n\`\`\`\n${kanban}\`\`\`\n_Dica: Para atualizar o status, envie:_\n\`/carreira status <empresa> <status>\``;
         await safeReply(ctx, msg, { parse_mode: "Markdown" });
       } else {
         await ctx.reply("📊 *Consolidando relatório de mercado e gaps de carreira...*", { parse_mode: "Markdown" });
@@ -535,7 +561,8 @@ async function main() {
       `• /hoje - Ver a Daily Note do dia no Obsidian\n` +
       `• /tarefas - Listar tarefas e checkboxes abertas no cofre\n` +
       `• /carreira - Ver gaps de mercado e matriz de estudos para Pleno\n` +
-      `• /carreira vagas - Listar vagas analisadas e status de CVs\n` +
+      `• /carreira vagas - Ver o funil de candidaturas (Kanban)\n` +
+      `• /carreira status - Atualizar status de candidatura (/carreira status <empresa> <status>)\n` +
       `• /digest - Gerar e receber o Daily News Digest agora\n` +
       `• /financas - Ver extrato financeiro e saldo do mês\n` +
       `• /auditar - Executar auto-auditoria técnica do projeto\n` +

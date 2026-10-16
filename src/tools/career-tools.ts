@@ -1,9 +1,18 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { tool } from "ai";
+import { tool, generateText } from "ai";
 import { z } from "zod";
 import { validateAllowedPath } from "./path-guard.js";
 import { cleanMarkdownContent, extractPageText } from "./web-tools.js";
+import { getLanguageModel } from "../core/llm.js";
+
+export type JobApplicationStatus =
+  | "analisada"
+  | "cv_gerado"
+  | "aplicada"
+  | "entrevista"
+  | "rejeitada"
+  | "oferta";
 
 export interface AnalyzedJobRecord {
   id: string;
@@ -20,6 +29,9 @@ export interface AnalyzedJobRecord {
   criticalGaps: string[];
   keyTechnologies: string[];
   cvPath?: string;
+  pitchPath?: string;
+  status?: JobApplicationStatus;
+  statusUpdatedAt?: string;
   notes?: string;
 }
 
@@ -38,14 +50,16 @@ export interface CareerMarketReport {
   studyMatrix: Array<{
     area: string;
     action: string;
+    localResource?: string;
     effort: "Baixo" | "Médio" | "Alto";
     marketImpact: "Alto" | "Muito Alto" | "Crítico";
     priority: "Alta" | "Média";
   }>;
+  weeklyStudyFocus?: string;
 }
 
 /**
- * Conteúdo padrão para inicialização do Perfil Profissional Master de Luiz Ricardo.
+ * Conteúdo padrão para inicialização do Perfil Profissional Master de Luiz Ricardo Favaro.
  */
 export const INITIAL_CAREER_PROFILE_CONTENT = `# 👨‍💻 Perfil Profissional Master - Luiz Ricardo Favaro
 
@@ -207,6 +221,21 @@ export async function ensureCareerProfileExists(
     await fs.writeFile(profileFile, INITIAL_CAREER_PROFILE_CONTENT, "utf-8");
     return { filePath: profileFile, created: true };
   }
+}
+
+/**
+ * Lê dinamicamente o conteúdo de Carreira/perfil-profissional.md do cofre do Obsidian.
+ */
+export async function readCareerProfile(
+  vaultPath: string,
+  allowedPaths: string[] = [vaultPath]
+): Promise<string> {
+  const { filePath } = await ensureCareerProfileExists(vaultPath, allowedPaths);
+  const check = validateAllowedPath(filePath, allowedPaths);
+  if (!check.allowed) {
+    throw new Error(check.error || "Acesso negado ao perfil profissional.");
+  }
+  return await fs.readFile(filePath, "utf-8");
 }
 
 /**
@@ -473,7 +502,7 @@ export function evaluateJobMatch(
     }
   }
 
-  // 2. Mapeamento de Tecnologias Relevantes na Vaga
+  // 2. Mapeamento de Tecnologias Relevantes na Vaga (Expandido com competências reais do perfil)
   const techCatalog: Record<string, RegExp> = {
     "TypeScript": /\b(typescript|ts)\b/i,
     "Node.js": /\b(node|nodejs|node\.js)\b/i,
@@ -482,20 +511,26 @@ export function evaluateJobMatch(
     "Next.js": /\b(next\.js|nextjs|next)\b/i,
     "React": /\b(react|reactjs|react\.js)\b/i,
     "APIs REST": /\b(rest|restful|api|apis)\b/i,
-    "IA Generativa & LLMs": /\b(ia generativa|genai|llm|llms|engenharia de prompts?|prompt engineering|openai|anthropic|gemini|modelos de linguagem|modelos abertos)\b/i,
+    "IA Generativa & LLMs": /\b(ia generativa|genai|llm|llms|engenharia de prompts?|prompt engineering|openai|gemini|modelos de linguagem|modelos abertos)\b/i,
+    "Claude & Anthropic": /\b(claude|anthropic)\b/i,
     "Agentes de IA & Orquestração": /\b(agentes?|multiagente|multi-agent|orquestra[çc][ãa]o de agentes|langchain|langgraph|llamaindex|crewai|autogen|tool calling|chamada de ferramentas|harness)\b/i,
+    "N8N & Automação de Workflows": /\b(n8n|workflow automation|automa[çc][ãa]o de fluxos?|webhooks?)\b/i,
     "Bases Vetoriais & RAG": /\b(rag|embeddings?|pgvector|lancedb|banco[s]? vetoria[il]|bases vetoriais|busca sem[âa]ntica|chunking|vector search)\b/i,
     "Python": /\b(python|fastapi|django|flask)\b/i,
+    "Go (Golang)": /\b(golang|go)\b/i,
+    "C/C++ & Embarcados": /\b(c\+\+|embedded|embarcados?|iot|esp32|microcontrolador|lorawan)\b/i,
+    "Microsoft Azure & Firebase": /\b(azure|firebase)\b/i,
     "Clean Architecture": /\b(clean architecture|hexagonal|arquitetura limpa|camadas|ports and adapters)\b/i,
     "Domain-Driven Design (DDD)": /\b(ddd|domain-driven|domain driven)\b/i,
     "Mensageria (RabbitMQ / Kafka)": /\b(rabbitmq|kafka|mensageria|filas|queues|pub\/sub|sqs|event-driven)\b/i,
     "TDD / Testes Automatizados": /\b(tdd|testes unitarios|testes unitários|jest|test-driven|testes de integracao|testes automatizados)\b/i,
     "Microsserviços": /\b(microservices|microsserviços|microsservicos|distributed systems|sistemas distribuídos)\b/i,
     "CI/CD": /\b(ci\/cd|pipeline|github actions|gitlab ci|jenkins)\b/i,
-    "Cloud (AWS / GCP / Azure)": /\b(aws|amazon web services|gcp|google cloud|azure)\b/i,
+    "Cloud (AWS / GCP)": /\b(aws|amazon web services|gcp|google cloud)\b/i,
     "Kubernetes": /\b(kubernetes|k8s)\b/i,
     "GraphQL": /\b(graphql)\b/i,
     "NoSQL / MongoDB / Redis": /\b(nosql|mongo|mongodb|redis|dynamodb)\b/i,
+    "Inglês Avançado / Fluente": /\b(ingl[êe]s (?:avan[çc]ado|fluente)|english (?:advanced|fluent))\b/i,
     "Java / Spring Boot": /\b(java|spring|spring boot)\b/i,
     "C# / .NET": /\b(c#|\.net|dotnet|asp\.net)\b/i,
   };
@@ -512,17 +547,23 @@ export function evaluateJobMatch(
   const quickWins: string[] = [];
   const criticalGaps: string[] = [];
 
-  // Núcleo de domínio comprovado
+  // Núcleo de domínio comprovado no perfil real
   if (detectedTechs.includes("TypeScript")) strengths.push("TypeScript (Tipagem estrita, Zod e arquitetura modular)");
   if (detectedTechs.includes("Node.js")) strengths.push("Node.js (APIs assíncronas, backend moderno em ESM nativo)");
   if (detectedTechs.includes("SQL / PostgreSQL")) strengths.push("SQL / PostgreSQL (Modelagem relacional, queries e migrações no CONTELE-OS)");
   if (detectedTechs.includes("Docker")) strengths.push("Docker (Conteinerização, multi-stage builds e compose)");
   if (detectedTechs.includes("Next.js") || detectedTechs.includes("React")) strengths.push("Next.js / React (Experiência prática no CONTELE-OS)");
-  if (detectedTechs.includes("APIs REST")) strengths.push("APIs RESTful (Design limpo, boas práticas HTTP e contratos seguros)");
-  if (detectedTechs.includes("IA Generativa & LLMs")) strengths.push("IA Generativa & LLMs (Experiência prática no Benito com engenharia de prompts, Vercel AI SDK e Ollama)");
-  if (detectedTechs.includes("Agentes de IA & Orquestração")) strengths.push("Agentes de IA & Orquestração (Arquitetura cognitiva do Benito, tool calling, raciocínio desacoplado e automação)");
-  if (detectedTechs.includes("Bases Vetoriais & RAG")) strengths.push("Bases Vetoriais & RAG (Pipeline local de RAG no Benito com LanceDB, EmbeddingGemma-2 768d e indexação incremental)");
+  if (detectedTechs.includes("APIs REST")) strengths.push("APIs RESTful (Design limpo, boas práticas HTTP, geração de PDFs e rastreamento Correios na Contele)");
+  if (detectedTechs.includes("IA Generativa & LLMs")) strengths.push("IA Generativa & LLMs (Engenharia de prompts, Vercel AI SDK e Ollama no Benito)");
+  if (detectedTechs.includes("Claude & Anthropic")) strengths.push("Claude & Anthropic (Aplicações produtivas de automação na Contele)");
+  if (detectedTechs.includes("Agentes de IA & Orquestração")) strengths.push("Agentes de IA & Orquestração (Arquitetura cognitiva do Benito, tool calling e raciocínio desacoplado)");
+  if (detectedTechs.includes("N8N & Automação de Workflows")) strengths.push("N8N & Automação de Workflows (Fluxos complexos, webhooks e integrações produtivas na Contele)");
+  if (detectedTechs.includes("Bases Vetoriais & RAG")) strengths.push("Bases Vetoriais & RAG (Pipeline local no Benito com LanceDB, EmbeddingGemma-2 768d e SHA-256)");
   if (detectedTechs.includes("Python")) strengths.push("Python (Conhecimento prático para automações, APIs e scripts utilitários)");
+  if (detectedTechs.includes("Go (Golang)")) strengths.push("Go (Golang) (Conhecimento prático de linguagem tipada e compilada)");
+  if (detectedTechs.includes("C/C++ & Embarcados")) strengths.push("C/C++ & Sistemas Embarcados (Projetos de IoT, ESP32 com TCC publicado na COBRICS e Linux com Buildroot)");
+  if (detectedTechs.includes("Microsoft Azure & Firebase")) strengths.push("Microsoft Azure & Firebase (Telemetria em VM Azure e sincronização em tempo real com Firebase)");
+  if (detectedTechs.includes("Inglês Avançado / Fluente")) strengths.push("Inglês Avançado (Comunicação técnica e fluência para equipes globais ou leitura profunda)");
 
   // Quick Wins (Base conceitual forte pelo MBA USP/Esalq + projetos)
   if (detectedTechs.includes("Clean Architecture")) quickWins.push("Clean Architecture (Módulo do MBA USP/Esalq e aplicação prática)");
@@ -548,7 +589,6 @@ export function evaluateJobMatch(
     criticalGaps.push("Tempo de experiência formal exigido (vaga sênior/lead exigindo 5+ anos exclusivos)");
   }
 
-  // Java só é gap se for o foco primário mandatório exclusivo sem suporte a Node/TS/Python
   if (
     detectedTechs.includes("Java / Spring Boot") &&
     !detectedTechs.includes("Node.js") &&
@@ -558,7 +598,6 @@ export function evaluateJobMatch(
     criticalGaps.push("Foco primário mandatório em ecossistema Java/Spring Boot (fora da stack core)");
   }
 
-  // C# / .NET só é gap se for mandatório e a vaga não for de Node/TS/Python
   if (
     detectedTechs.includes("C# / .NET") &&
     !detectedTechs.includes("Node.js") &&
@@ -575,24 +614,18 @@ export function evaluateJobMatch(
   // 4. Cálculo do Match Score (0 a 100)
   let score = 50; // base
 
-  // Pontos fortes adicionam até +35 pontos
   score += Math.min(strengths.length * 8, 35);
-
-  // Quick wins adicionam até +15 pontos
   score += Math.min(quickWins.length * 4, 15);
-
-  // Penalização por gaps críticos
   score -= criticalGaps.length * 25;
 
-  // Bonificação se vaga menciona Node/TypeScript ou IA/Python explicitamente
   if (
     (detectedTechs.includes("TypeScript") && detectedTechs.includes("Node.js")) ||
-    (detectedTechs.includes("IA Generativa & LLMs") && detectedTechs.includes("Python"))
+    (detectedTechs.includes("IA Generativa & LLMs") && detectedTechs.includes("Python")) ||
+    (detectedTechs.includes("Claude & Anthropic") && detectedTechs.includes("N8N & Automação de Workflows"))
   ) {
     score += 10;
   }
 
-  // Clamping
   score = Math.max(10, Math.min(98, score));
 
   // 5. Veredito Pragmático
@@ -623,7 +656,7 @@ export function evaluateJobMatch(
 }
 
 /**
- * Monta o Pitch de Conexão de 3 parágrafos para abordagem no LinkedIn.
+ * Monta o Pitch de Conexão de 3 parágrafos para abordagem no LinkedIn sem truncamento de termos compostos.
  */
 export function buildConnectionPitch(
   company: string,
@@ -631,83 +664,520 @@ export function buildConnectionPitch(
   strengths: string[],
   quickWins: string[]
 ): string {
-  const topTechs = strengths.slice(0, 3).map((s) => s.split(" ")[0]).join(", ") || "TypeScript e Node.js";
-  const mbaHighlights = quickWins.slice(0, 2).map((q) => q.split(" ")[0]).join(" e ") || "Clean Architecture e TDD";
+  const topTechs = strengths
+    .slice(0, 3)
+    .map((s) => s.split("(")[0].trim())
+    .filter(Boolean)
+    .join(", ") || "TypeScript e Node.js";
 
-  return `Olá! Acompanho a evolução da ${company} e me identifiquei muito com a oportunidade para ${role}. Sou Engenheiro da Computação, pós-graduando no MBA em Engenharia de Software pela USP/Esalq, e venho atuando no desenvolvimento de soluções backend e fullstack robustas.
+  const mbaHighlights = quickWins
+    .slice(0, 2)
+    .map((q) => q.split("(")[0].trim())
+    .filter(Boolean)
+    .join(" e ") || "Clean Architecture e TDD";
 
-No meu dia a dia técnico, tenho foco prático em ecossistema ${topTechs}, além de arquitetura limpa, modelagem relacional em SQL e microsserviços. Em projetos de alta exigência como o CONTELE-OS e meu assistente pessoal Benito, apliquei conceitos avançados de ${mbaHighlights} para entregar código resiliente, testável e de alto desempenho.
+  const isGenericComp = !company || company.trim().toLowerCase() === "empresa";
+  const greeting = isGenericComp
+    ? `Olá! Vi a oportunidade para ${role} e me identifiquei muito com os desafios técnicos da posição.`
+    : `Olá! Acompanho a evolução da ${company} e me identifiquei muito com a oportunidade para ${role}.`;
 
-Acredito que posso somar rapidamente aos desafios de engenharia do time da ${company}. Fico à disposição para uma conversa rápida sobre como posso agregar valor ao projeto. Um abraço!`;
+  const companyCallToAction = isGenericComp
+    ? `Acredito que posso somar rapidamente aos desafios de engenharia do time.`
+    : `Acredito que posso somar rapidamente aos desafios de engenharia do time da ${company}.`;
+
+  return `${greeting} Sou Engenheiro da Computação, pós-graduando no MBA em Engenharia de Software pela USP/Esalq, e venho atuando no desenvolvimento de soluções backend e fullstack robustas.
+
+No meu dia a dia técnico, tenho foco prático em ${topTechs}, além de arquitetura limpa, modelagem relacional em SQL e microsserviços. Em projetos de alta exigência como o CONTELE-OS e meu assistente pessoal Benito, apliquei conceitos avançados de ${mbaHighlights} para entregar código resiliente, testável e de alto desempenho.
+
+${companyCallToAction} Fico à disposição para uma conversa rápida sobre como posso agregar valor ao projeto. Um abraço!`;
 }
 
 /**
- * Gera o conteúdo Markdown do currículo cirurgicamente personalizado para a vaga.
+ * Estrutura representativa de um projeto prático.
  */
-export function buildTailoredResumeMarkdown(
+export interface PracticalProjectItem {
+  id: string;
+  title: string;
+  period: string;
+  roleOrContext: string;
+  stack: string[];
+  bullets: string[];
+  repoUrl?: string;
+  relevanceScore: number;
+}
+
+/**
+ * Catálogo completo de projetos reais de Luiz Ricardo Favaro.
+ */
+export const MASTER_PROJECTS_CATALOG: PracticalProjectItem[] = [
+  {
+    id: "benito",
+    title: "Benito — Assistente Pessoal Autônomo & Engenharia Cognitiva",
+    period: "2026",
+    roleOrContext: "Criador & Engenheiro Principal",
+    stack: ["Node.js 22+", "TypeScript 5.8+", "Vercel AI SDK", "Ollama", "LanceDB", "EmbeddingGemma-2", "grammY", "Zod", "Jest"],
+    repoUrl: "https://github.com/ri-favaro/BenitoAgentePessoal",
+    bullets: [
+      "Concepção e engenharia de arquitetura cognitiva de raciocínio desacoplado (Decoupled Reasoning) com parser FSM em streaming (<thinking>) sem latência adicional.",
+      "Pipeline local de RAG com LanceDB e EmbeddingGemma-2 (768d) otimizado (~270MB RAM), com indexação incremental via SHA-256.",
+      "Runner de orquestração técnica com whitelist de comandos, controle de timeout e sandbox estrito de filesystem (path-guard).",
+      "Cobertura de 13 suítes de testes automatizados com Jest e Node.js Test Runner garantindo 100% de confiabilidade funcional.",
+    ],
+    relevanceScore: 10,
+  },
+  {
+    id: "cobrics-tcc",
+    title: "TCC Premiado & Publicado na COBRICS — Jogos Lúdico-Musicais Interativos",
+    period: "2024",
+    roleOrContext: "Trabalho de Conclusão de Curso (Nota 10) & Artigo Publicado no Congresso COBRICS",
+    stack: ["C/C++", "ESP32", "RFID", "Firebase", "Android", "Prototipagem Eletrônica"],
+    bullets: [
+      "Arquitetura ponta a ponta integrando hardware embarcado (ESP32 + RFID), sincronização em nuvem em tempo real (Firebase) e aplicativo móvel Android.",
+      "Validado em campo com crianças (4 a 8 anos) e pedagogos; obteve nota máxima (10) na banca de Engenharia da Computação e publicação científica nos anais da COBRICS 2024.",
+    ],
+    relevanceScore: 8,
+  },
+  {
+    id: "rmda-azure",
+    title: "RMDA — Robô de Telemetria e Monitoramento de Ambientes em Nuvem",
+    period: "2023",
+    roleOrContext: "Prova de Conceito IoT & Cloud",
+    stack: ["Microsoft Azure (VM)", "LoRaWAN", "The Things Network (TTN)", "IoT", "Dashboard Gráfico"],
+    repoUrl: "https://github.com/ri-favaro/Projeto-IOT-23",
+    bullets: [
+      "Desenvolvimento de telemetria distribuída com transmissão de dados de longo alcance via LoRaWAN/TTN para servidor e processamento em VM Microsoft Azure com dashboard gráfico.",
+    ],
+    relevanceScore: 6,
+  },
+  {
+    id: "linux-buildroot",
+    title: "Sistema Operacional Linux Customizado com Buildroot para Raspberry Pi 4",
+    period: "2023",
+    roleOrContext: "Sistemas Embarcados & Otimização de Kernel",
+    stack: ["Buildroot", "Raspberry Pi 4", "Linux Embarcado", "Shell Script"],
+    repoUrl: "https://github.com/ri-favaro/Primeiro-sistema-operacional-proprio",
+    bullets: [
+      "Criação e compilação de SO Linux customizado e enxuto do zero utilizando Buildroot e Shell Script para hardware real Raspberry Pi 4.",
+    ],
+    relevanceScore: 5,
+  },
+  {
+    id: "widrow-hoff",
+    title: "Algoritmo Widrow-Hoff — Machine Learning Supervisionado Interativo",
+    period: "2023",
+    roleOrContext: "Machine Learning Clássico",
+    stack: ["JavaScript", "HTML5", "CSS3", "Machine Learning"],
+    repoUrl: "https://github.com/ri-favaro/Algoritmo-baseado-no-m-todo-WidrowHoff---HTML",
+    bullets: [
+      "Implementação interativa do algoritmo supervisionado Widrow-Hoff (LMS) com visualização matemática da convergência de pesos em tempo real no navegador.",
+    ],
+    relevanceScore: 4,
+  },
+];
+
+/**
+ * Seleciona dinamicamente os 2 a 3 projetos práticos mais aderentes à vaga para manter o currículo em até 2 páginas.
+ */
+export function selectTailoredProjects(keyTechnologies: string[] = []): PracticalProjectItem[] {
+  const techsLower = keyTechnologies.map((t) => t.toLowerCase());
+
+  const isEmbeddedOrLinux = techsLower.some((t) =>
+    t.includes("c/c++") || t.includes("embarcados") || t.includes("linux") || t.includes("iot")
+  );
+  const isCloudOrAzure = techsLower.some((t) =>
+    t.includes("azure") || t.includes("cloud") || t.includes("telemetria")
+  );
+
+  if (isEmbeddedOrLinux) {
+    return [
+      MASTER_PROJECTS_CATALOG.find((p) => p.id === "cobrics-tcc")!,
+      MASTER_PROJECTS_CATALOG.find((p) => p.id === "linux-buildroot")!,
+      MASTER_PROJECTS_CATALOG.find((p) => p.id === "benito")!,
+    ].filter(Boolean);
+  }
+
+  if (isCloudOrAzure) {
+    return [
+      MASTER_PROJECTS_CATALOG.find((p) => p.id === "benito")!,
+      MASTER_PROJECTS_CATALOG.find((p) => p.id === "rmda-azure")!,
+      MASTER_PROJECTS_CATALOG.find((p) => p.id === "cobrics-tcc")!,
+    ].filter(Boolean);
+  }
+
+  // Padrão para Backend / IA / Fullstack / Software em geral
+  return [
+    MASTER_PROJECTS_CATALOG.find((p) => p.id === "benito")!,
+    MASTER_PROJECTS_CATALOG.find((p) => p.id === "cobrics-tcc")!,
+  ].filter(Boolean);
+}
+
+/**
+ * Gera o texto do Resumo Profissional, com opção de refinamento assistido por LLM.
+ */
+export async function buildProfessionalSummary(
+  role: string,
+  company: string,
+  keyTechnologies: string[] = []
+): Promise<string> {
+  const defaultSummary =
+    `Engenheiro da Computação (UNISANTA) e pós-graduando no MBA em Engenharia de Software (USP/ESALQ), com atuação prática e comprovada na construção de APIs REST escaláveis, integrações críticas de sistemas, microsserviços e soluções produtivas com IA Generativa (Claude e modelos locais). Sólida proficiência em TypeScript, Node.js (ESM), PostgreSQL, Docker e Next.js, combinada com rigor arquitetural em Clean Architecture, Domain-Driven Design (DDD) e TDD. Focado em código limpo, testável, de alta manutenibilidade e entrega ágil orientada a valor de negócio.`;
+
+  try {
+    const model = getLanguageModel();
+    const prompt = `Você é o assistente de carreira pessoal de Luiz Ricardo Favaro.
+Gere um parágrafo único de Resumo Profissional (4 a 6 linhas) calibrado especificamente para o nível PLENO para a vaga de "${role}" na empresa "${company}".
+Tecnologias-chave da vaga: ${keyTechnologies.join(", ") || "TypeScript, Node.js, SQL, Docker, APIs REST"}.
+
+FATOS REAIS QUE VOCÊ DEVE USAR (NUNCA INVENTE OUTROS):
+- Nome: Luiz Ricardo Favaro
+- Graduação: Engenheiro da Computação (Universidade Santa Cecília - UNISANTA, TCC nota 10 publicado na COBRICS 2024).
+- Pós-graduação: MBA em Engenharia de Software (USP/ESALQ) em andamento.
+- Atuação Atual: Contele (Desenvolvedor de Integrações - Node.js, TypeScript, N8N, fluxo de postagem Correios, LLMs/Claude e CONTELE-OS com Next.js/PostgreSQL).
+- Projetos: Benito (assistente autônomo com RAG LanceDB e Vercel AI SDK).
+- Idiomas: Inglês Avançado.
+
+DIRETRIZES ESTREITAS:
+1. Posicione com tom de Engenheiro de Software Pleno experiente em produção. NUNCA use "em início de carreira" nem "buscando aprender".
+2. Não invente nenhuma tecnologia ou experiência que não esteja nos fatos acima.
+3. Responda APENAS o parágrafo em Markdown sem títulos ou explicações.`;
+
+    const { text } = await generateText({
+      model,
+      prompt,
+      maxTokens: 250,
+      temperature: 0.3,
+    });
+
+    const trimmed = text.trim();
+    if (trimmed && trimmed.length > 80 && !trimmed.toLowerCase().includes("início de carreira")) {
+      return trimmed;
+    }
+  } catch {
+    // Fallback gracioso para template determinístico caso a LLM esteja offline ou em testes
+  }
+
+  return defaultSummary;
+}
+
+/**
+ * Gera o conteúdo Markdown do currículo limpo (pronto para PDF/ATS).
+ */
+export async function buildTailoredResumeMarkdown(
   company: string,
   role: string,
-  pitch: string,
   strengths: string[],
-  quickWins: string[]
-): string {
+  quickWins: string[],
+  keyTechnologies: string[] = []
+): Promise<string> {
   const dateStr = new Date().toISOString().slice(0, 10);
+  const summary = await buildProfessionalSummary(role, company, keyTechnologies);
+  const selectedProjects = selectTailoredProjects(keyTechnologies);
 
-  return `# Luiz Ricardo - ${role}
+  const skillsList = [
+    "- **Linguagens:** TypeScript, JavaScript (ES2023+ / Node.js), Python, SQL (PostgreSQL, MySQL), Go (Golang), C/C++.",
+    "- **Backend & Integrações:** APIs RESTful (design, consumo, geração de PDFs e webhooks), Node.js (v20+ / v22+), Express, Zod, N8N (automação de workflows).",
+    "- **IA & Engenharia Cognitiva:** Integração com APIs de LLMs (Anthropic Claude, OpenAI), Vercel AI SDK, Ollama, RAG com LanceDB (vetorial) e EmbeddingGemma-2.",
+    "- **Arquitetura & Engenharia:** Clean Architecture, Domain-Driven Design (DDD), Test-Driven Development (TDD), Microsserviços e Mensageria.",
+    "- **Frontend:** Next.js (App Router, Server Components), React, Tailwind CSS.",
+    "- **DevOps & Ferramentas:** Docker, Docker Compose, Git, GitHub Actions, Microsoft Azure (VMs), Linux.",
+  ];
+
+  const projectsMarkdown = selectedProjects
+    .map((p) => {
+      const repoLine = p.repoUrl ? ` | [Repositório GitHub](${p.repoUrl})` : "";
+      return `#### **${p.title}** | *${p.roleOrContext}* (${p.period})${repoLine}\n` +
+        `- **Stack:** ${p.stack.join(", ")}\n` +
+        p.bullets.map((b) => `- ${b}`).join("\n");
+    })
+    .join("\n\n");
+
+  return `# Luiz Ricardo Favaro - ${role}
 **Empresa Alvo:** ${company} | **Data da Versão:** ${dateStr}
-**Localização:** Brasil | **Contato:** luizricardo.engcomp@gmail.com | [LinkedIn](https://linkedin.com) | [GitHub](https://github.com/ri-favaro)
+**Localização:** Guarujá, São Paulo | **Contato:** ricardofavaro6@gmail.com | (13) 98174-8698
+**Perfis:** [LinkedIn](https://www.linkedin.com/in/ri-favaro/) | [GitHub](https://github.com/ri-favaro)
 
 ---
 
-## 🎯 Pitch de Conexão (LinkedIn / Recrutador)
+## 👤 Resumo Profissional
 
-> *Utilize o texto abaixo para abordagem direta ao Tech Lead ou Tech Recruiter no LinkedIn:*
+${summary}
+
+---
+
+## 🛠️ Competências Técnicas
+
+${skillsList.join("\n")}
+
+---
+
+## 💼 Experiência Profissional
+
+#### **Contele** | *Desenvolvedor de Integrações · Foco em IA e Automações*
+*Santos, SP | abr/2026 – atual*
+- Desenvolvimento de integrações críticas e automações de processos de negócio com **Node.js**, **TypeScript** e **N8N**.
+- Automação completa ponta a ponta do fluxo de postagem dos **Correios** via APIs REST externas (pré-postagem, geração automatizada de etiquetas em PDF e dashboard de rastreamento).
+- Aplicação prática de **LLMs (Anthropic Claude)** em fluxos produtivos de automação inteligente e triagem de dados.
+- Desenvolvimento fullstack na plataforma **CONTELE-OS** utilizando **Next.js**, **React**, **TypeScript** e **Supabase (PostgreSQL)** com migrações versionadas e validação estrita via **Zod**.
+- Implementação de testes unitários com **Jest** e atuação em equipe ágil com metodologia **Kanban**.
+
+#### **O Especialista** | *Suporte de TI & Infraestrutura*
+*Guarujá, SP | jun/2024 – dez/2024 (6 meses)*
+- Prestação de suporte técnico nível 1 e 2 presencial e remoto para 4 a 5 empresas clientes simultâneas.
+- Diagnóstico e reparo de hardware, configuração de redes locais e resolução de incidentes críticos de TI com foco em agilidade e SLA.
+
+---
+
+## 🚀 Projetos de Engenharia Relevantes
+
+${projectsMarkdown}
+
+---
+
+## 🎓 Formação Acadêmica
+
+- **MBA em Engenharia de Software** | *Universidade de São Paulo (USP / ESALQ)* — Em andamento
+  - Módulos avançados: Clean Architecture, DDD, Mensageria Assíncrona (RabbitMQ/Kafka), Microsserviços e TDD.
+- **Bacharelado em Engenharia da Computação** | *Universidade Santa Cecília (UNISANTA)* — Concluído em 2024
+  - Autor de artigo publicado no congresso científico COBRICS 2024; nota máxima (10) no TCC de jogos lúdicos com ESP32 e Firebase.
+
+---
+
+## 🌐 Idiomas
+
+- **Português:** Nativo
+- **Inglês:** Avançado
+- **Espanhol:** Intermediário
+`;
+}
+
+/**
+ * Gera o arquivo desacoplado de Pitch de Conexão + Guia de Revisão e Otimização ATS.
+ */
+export function buildTailoredPitchAndAtsGuide(
+  company: string,
+  role: string,
+  pitch: string,
+  evalResult: {
+    matchScore: number;
+    verdict: string;
+    strengths: string[];
+    quickWins: string[];
+    criticalGaps: string[];
+    keyTechnologies: string[];
+  },
+  cvFileName: string
+): string {
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  return `# 🎯 Pitch de Conexão & Guia de Otimização ATS
+**Cargo Alvo:** ${role} | **Empresa:** ${company}
+**Data da Versão:** ${dateStr} | **Match Score:** ${evalResult.matchScore}% (${evalResult.verdict.toUpperCase()})
+**Arquivo de Currículo Gerado:** \`${cvFileName}\`
+
+---
+
+## 💬 Pitch de Abordagem Direta (LinkedIn / Tech Recruiter / Tech Lead)
+
+> *Copie e cole a mensagem abaixo para abordagem personalizada via mensagem ou nota de conexão no LinkedIn:*
 
 ${pitch}
 
 ---
 
-## 📄 Currículo Personalizado
+## 🔍 Guia de Revisão & Otimização ATS (Antes de Enviar)
 
-### 👤 Resumo Profissional
-Engenheiro da Computação com pós-graduação em andamento no **MBA em Engenharia de Software (USP/Esalq)** e atuação prática na construção de sistemas web e serviços backend escaláveis. Sólida proficiência em **TypeScript**, **Node.js**, **SQL (PostgreSQL)**, **Docker** e **Next.js**, combinada com rigor arquitetural em **Clean Architecture**, **Domain-Driven Design (DDD)** e **TDD**. Focado em entregar código limpo, desacoplado, com testes automatizados e alta manutenibilidade técnica.
+### 📌 1. Palavras-Chave da Vaga Mapeadas & Presentes no CV
+${evalResult.keyTechnologies.map((t) => `- [x] **${t}:** presente e evidenciada nas competências e experiências`).join("\n") || "- [x] Stacks essenciais (TypeScript, Node.js, SQL, Docker)"}
 
----
+### 💡 2. Recomendações para Formulários ATS (Gupy, Greenhouse, Lever)
+- **Título de Entrada:** Use exatamente \`${role}\` como seu título principal.
+- **Carta de Apresentação / Campo 'Sobre Você':** Utilize os 2 primeiros parágrafos do Pitch de Conexão acima.
+- **Arquivo para Upload:** Exporte o arquivo limpo \`${cvFileName}\` em PDF antes do upload.
 
-### 🛠️ Competências Técnicas Alinhadas à Vaga
-- **Linguagens & Backend:** TypeScript, Node.js (ESM), JavaScript (ES2023+), APIs RESTful, Express, Zod.
-- **Arquitetura & Engenharia:** Clean Architecture, Domain-Driven Design (DDD), Test-Driven Development (TDD), Microsserviços e Mensageria (${quickWins.join(", ") || "Clean Architecture, DDD"}).
-- **Bancos de Dados:** PostgreSQL, SQLite, LanceDB (vetorial), modelagem relacional, otimização de queries e migrações versionadas.
-- **Frontend & UI:** Next.js (App Router), React, Tailwind CSS, componentização desacoplada e validação de regras de negócio.
-- **DevOps & Qualidade:** Docker, Docker Compose, Git Flow, CI/CD com GitHub Actions, Jest e Node Test Runner.
-
----
-
-### 💼 Experiência & Projetos Práticos Relevantes
-
-#### **CONTELE-OS** | *Engenheiro de Software Fullstack*
-- Desenvolvimento de módulos essenciais para o sistema web de ordens de serviço e operações de telecomunicações utilizando **Next.js**, **React**, **TypeScript** e **Supabase (PostgreSQL)**.
-- Implementação de regras de negócio com validação estrita via **Zod** e persistência relacional com migrações SQL versionadas.
-- Otimização da experiência de uso e confiabilidade operacional de formulários e dashboards dinâmicos.
-- Escrita de testes unitários com **Jest**, garantindo regressão zero em fluxos críticos de atendimento.
-
-#### **Benito (Agente Pessoal & Engenharia Cognitiva)** | *Criador & Engenheiro Principal*
-- Concepção e engenharia completa de um assistente local e autônomo em **Node.js 22+** e **TypeScript 5.8+** com **Vercel AI SDK**.
-- Criação de um streaming parser FSM desacoplado para monólogo interno (\`<thinking>\`) sem latência adicional.
-- Implementação de banco vetorial local com **LanceDB** e modelo de embeddings **EmbeddingGemma-2** (768d) com indexação incremental via SHA-256.
-- Runner de orquestração técnica seguro com whitelist de comandos e controle de sandbox de filesystem (\`path-guard\`).
-
----
-
-### 🎓 Formação Acadêmica
-
-- **MBA em Engenharia de Software** | *Universidade de São Paulo (USP / Esalq)* — Em andamento
-  - Módulos avançados: Clean Architecture, DDD, Mensageria Assíncrona (RabbitMQ/Kafka), Microsserviços e TDD.
-- **Bacharelado em Engenharia da Computação** | *Graduação Completa*
-  - Fundamentos de estruturas de dados, algoritmos, arquitetura de computadores e sistemas distribuídos.
-
----
+### 🎯 3. Pontos de Atenção para a Entrevista Técnica
+- **Destaque de Engenharia na Contele:** Mencione a integração com Correios (geração de PDF, APIs REST e dashboard) e o uso do Claude/N8N para automação.
+- **Destaque do Projeto Benito:** Use o Benito como exemplo de arquitetura de alta performance (RAG local com LanceDB, streaming com parser FSM e testes automatizados com Jest).
+- **Fechamento de Quick Wins do MBA:** ${evalResult.quickWins.slice(0, 2).join("; ") || "Evidencie Clean Architecture e testes unitários."}
 `;
+}
+
+/**
+ * Formata visualmente o funil de candidaturas em colunas Kanban para exibição no CLI e Telegram.
+ */
+export function formatJobPipelineKanban(jobs: AnalyzedJobRecord[]): string {
+  if (jobs.length === 0) {
+    return "Nenhuma vaga analisada no funil ainda.";
+  }
+
+  const columns: Record<JobApplicationStatus, AnalyzedJobRecord[]> = {
+    analisada: [],
+    cv_gerado: [],
+    aplicada: [],
+    entrevista: [],
+    rejeitada: [],
+    oferta: [],
+  };
+
+  for (const j of jobs) {
+    const st = j.status || (j.cvPath ? "cv_gerado" : "analisada");
+    if (columns[st]) {
+      columns[st].push(j);
+    } else {
+      columns.analisada.push(j);
+    }
+  }
+
+  let out = `=== 📊 FUNIL DE CANDIDATURAS (${jobs.length} VAGAS) ===\n\n`;
+
+  out += `📥 [1. ANALISADAS] (${columns.analisada.length})\n`;
+  if (columns.analisada.length === 0) {
+    out += `   (Nenhuma vaga nesta etapa)\n`;
+  } else {
+    for (const j of columns.analisada) {
+      out += `   • ${j.company} - ${j.role} (${j.matchScore}% | ID: ${j.id})\n`;
+    }
+  }
+  out += "\n";
+
+  out += `📄 [2. CV PRONTO & PITCH GERADO] (${columns.cv_gerado.length})\n`;
+  if (columns.cv_gerado.length === 0) {
+    out += `   (Nenhuma vaga nesta etapa)\n`;
+  } else {
+    for (const j of columns.cv_gerado) {
+      out += `   • ${j.company} - ${j.role} (${j.matchScore}% | ID: ${j.id})\n`;
+    }
+  }
+  out += "\n";
+
+  out += `📤 [3. APLICADAS / EM ANÁLISE] (${columns.aplicada.length})\n`;
+  if (columns.aplicada.length === 0) {
+    out += `   (Nenhuma vaga nesta etapa)\n`;
+  } else {
+    for (const j of columns.aplicada) {
+      out += `   • ${j.company} - ${j.role} (${j.matchScore}% | ID: ${j.id})\n`;
+    }
+  }
+  out += "\n";
+
+  out += `💬 [4. EM ENTREVISTA / DESAFIO] (${columns.entrevista.length})\n`;
+  if (columns.entrevista.length === 0) {
+    out += `   (Nenhuma vaga nesta etapa)\n`;
+  } else {
+    for (const j of columns.entrevista) {
+      out += `   • ${j.company} - ${j.role} [${j.matchScore}%] ${j.notes ? `(${j.notes})` : ""}\n`;
+    }
+  }
+  out += "\n";
+
+  const totalFinalizadas = columns.oferta.length + columns.rejeitada.length;
+  out += `🏁 [5. FINALIZADAS] (${totalFinalizadas})\n`;
+  if (totalFinalizadas === 0) {
+    out += `   (Nenhuma vaga finalizada)\n`;
+  } else {
+    for (const j of columns.oferta) {
+      out += `   🎉 OFERTA: ${j.company} - ${j.role}\n`;
+    }
+    for (const j of columns.rejeitada) {
+      out += `   🔴 REJEITADA: ${j.company} - ${j.role}\n`;
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Constrói dinamicamente a Matriz de Estudos cruzando gaps com materiais do MBA.
+ */
+export function buildDynamicStudyMatrix(
+  jobs: AnalyzedJobRecord[],
+  topSkills: Array<{ skill: string; count: number; percentage: number }>,
+  topCriticalGaps: Array<{ gap: string; count: number }>,
+  topQuickWins: Array<{ gap: string; count: number }>
+): {
+  studyMatrix: CareerMarketReport["studyMatrix"];
+  weeklyStudyFocus: string;
+} {
+  const matrix: CareerMarketReport["studyMatrix"] = [];
+
+  const allGapsText = [
+    ...topCriticalGaps.map((g) => g.gap),
+    ...topQuickWins.map((q) => q.gap),
+    ...topSkills.slice(0, 5).map((s) => s.skill),
+  ].join(" ").toLowerCase();
+
+  // 1. Mensageria & Filas
+  if (allGapsText.includes("mensageria") || allGapsText.includes("kafka") || allGapsText.includes("rabbitmq")) {
+    matrix.push({
+      area: "Mensageria & Filas Assíncronas (RabbitMQ / Kafka)",
+      action: "Praticar envio e consumo assíncrono com DLQ, retries e ack/nack no Node.js",
+      localResource: "memory/topics/arquitetura-mensageria.md & materiais do MBA",
+      effort: "Médio",
+      marketImpact: "Alto",
+      priority: "Alta",
+    });
+  }
+
+  // 2. Clean Architecture & DDD
+  if (allGapsText.includes("clean architecture") || allGapsText.includes("ddd") || allGapsText.includes("arquitetura")) {
+    matrix.push({
+      area: "Clean Architecture & DDD Prático",
+      action: "Revisar use cases e interfaces de domínio no backend",
+      localResource: "G:\\MBA-EngSoftware (Resumo_Avaliacao_Clean_Architecture_II.pdf e resumo-ddd.pdf)",
+      effort: "Baixo",
+      marketImpact: "Alto",
+      priority: "Alta",
+    });
+  }
+
+  // 3. Cloud & Docker
+  if (allGapsText.includes("cloud") || allGapsText.includes("aws") || allGapsText.includes("docker") || allGapsText.includes("azure")) {
+    matrix.push({
+      area: "Cloud & Conteinerização (Docker / Azure / AWS)",
+      action: "Configurar deploy de container com Docker Compose e rotinas de CI/CD",
+      localResource: "Projeto RMDA Azure (Projeto-IOT-23) & Dockerfiles multi-stage",
+      effort: "Médio",
+      marketImpact: "Muito Alto",
+      priority: "Alta",
+    });
+  }
+
+  // 4. Testes Automatizados & TDD
+  if (allGapsText.includes("test") || allGapsText.includes("tdd") || allGapsText.includes("jest")) {
+    matrix.push({
+      area: "Testes Automatizados (TDD & Jest)",
+      action: "Expandir testes unitários e de integração no backend com mocks desacoplados",
+      localResource: "Suítes Jest do CONTELE-OS e testes do Benito",
+      effort: "Baixo",
+      marketImpact: "Alto",
+      priority: "Alta",
+    });
+  }
+
+  // Se a lista estiver vazia por falta de gaps críticos específicos, fornece a base recomendada para Pleno
+  if (matrix.length === 0) {
+    matrix.push(
+      {
+        area: "Mensageria & Filas (RabbitMQ / Kafka)",
+        action: "Praticar envio e consumo assíncrono de eventos com DLQ no Node.js",
+        localResource: "memory/topics/arquitetura-mensageria.md",
+        effort: "Médio",
+        marketImpact: "Alto",
+        priority: "Alta",
+      },
+      {
+        area: "Clean Architecture & DDD Prático",
+        action: "Modularizar use cases e entidades desacopladas em microsserviço modelo",
+        localResource: "G:\\MBA-EngSoftware",
+        effort: "Baixo",
+        marketImpact: "Alto",
+        priority: "Alta",
+      }
+    );
+  }
+
+  const weeklyStudyFocus = matrix[0]?.area || "Arquitetura e Microsserviços";
+
+  return { studyMatrix: matrix, weeklyStudyFocus };
 }
 
 /**
@@ -741,7 +1211,6 @@ export function createCareerTools(
       }),
       execute: async ({ url, jobText, company = "Empresa", role = "Desenvolvedor Pleno" }) => {
         try {
-          // Validação inicial de entrada
           if (!url && !jobText) {
             return {
               success: false,
@@ -749,7 +1218,6 @@ export function createCareerTools(
             };
           }
 
-          // Garante a existência do perfil profissional master
           await ensureCareerProfileExists(vaultPath, allowedPaths);
 
           let rawContent = jobText || "";
@@ -767,7 +1235,6 @@ export function createCareerTools(
             }
           }
 
-          // Se a empresa ou cargo vierem com os valores default ou vazios, tenta extrair da página
           let finalCompany = company;
           let finalRole = role;
           if (finalCompany === "Empresa" || finalRole === "Desenvolvedor Pleno" || !finalCompany || !finalRole) {
@@ -800,6 +1267,8 @@ export function createCareerTools(
             quickWins: evalResult.quickWins,
             criticalGaps: evalResult.criticalGaps,
             keyTechnologies: evalResult.keyTechnologies,
+            status: "analisada",
+            statusUpdatedAt: dateStr,
           };
 
           await saveAnalyzedJob(vaultPath, record, allowedPaths);
@@ -812,7 +1281,7 @@ export function createCareerTools(
             `**💪 Pontos Fortes Imediatos:**\n${evalResult.strengths.map((s) => `  - ${s}`).join("\n") || "  - Nenhum alinhamento imediato identificado"}\n\n` +
             `**⚡ Quick Wins (Reforçar no CV/Pitch via MBA USP/Esalq):**\n${evalResult.quickWins.map((q) => `  - ${q}`).join("\n") || "  - Não há gaps conceituais pontuais"}\n\n` +
             `**⚠️ Gaps Críticos:**\n${evalResult.criticalGaps.map((g) => `  - ${g}`).join("\n") || "  - Nenhum gap impeditivo para nível Pleno"}\n\n` +
-            `*Registro salvo em \`Carreira/vagas-analisadas.json\`.*`;
+            `*Registro salvo em \`Carreira/vagas-analisadas.json\` (Status: ANALISADA).*`;
 
           return {
             success: true,
@@ -838,7 +1307,7 @@ export function createCareerTools(
 
     generate_tailored_application: tool({
       description:
-        "Gera uma versão customizada do Currículo em Markdown e um Pitch de Conexão de 3 parágrafos para o LinkedIn, reorganizando cirurgicamente as experiências e competências reais do perfil master (CONTELE-OS, Benito, MBA USP/Esalq) para atender às exigências da vaga, sem inventar nenhum dado. Salva o arquivo em Carreira/Vagas/YYYY-MM-Empresa-CV.md no cofre do Obsidian.",
+        "Gera uma versão customizada do Currículo limpo em Markdown (YYYY-MM-Empresa-Cargo-CV.md) e um arquivo desacoplado de Pitch de Conexão + Guia ATS (YYYY-MM-Empresa-Cargo-Pitch.md), adaptando cirurgicamente as experiências e competências reais do perfil master (Contele, Benito, TCC COBRICS, MBA USP/Esalq) sem inventar nada. Salva ambos em Carreira/Vagas/ no cofre do Obsidian e atualiza o status para 'cv_gerado'.",
       parameters: z.object({
         company: z.string().describe("Nome da empresa anunciante."),
         role: z.string().describe("Título do cargo pretendido (ex: 'Desenvolvedor Backend Pleno')."),
@@ -860,41 +1329,74 @@ export function createCareerTools(
             (j) => j.id === jobId || j.company.toLowerCase() === company.toLowerCase()
           );
 
-          const strengths = matchedJob?.strengths || (focusSkills.length > 0 ? focusSkills : ["TypeScript", "Node.js", "PostgreSQL", "Docker"]);
+          const strengths = matchedJob?.strengths || (focusSkills.length > 0 ? focusSkills : ["TypeScript", "Node.js", "SQL / PostgreSQL", "Docker"]);
           const quickWins = matchedJob?.quickWins || ["Clean Architecture (MBA USP/Esalq)", "TDD com Jest"];
+          const keyTechnologies = matchedJob?.keyTechnologies || focusSkills;
 
           const pitch = buildConnectionPitch(company, role, strengths, quickWins);
-          const resumeMarkdown = buildTailoredResumeMarkdown(company, role, pitch, strengths, quickWins);
+          const resumeMarkdown = await buildTailoredResumeMarkdown(company, role, strengths, quickWins, keyTechnologies);
 
           const datePrefix = new Date().toISOString().slice(0, 7); // YYYY-MM
           const cleanComp = company.replace(/[^a-zA-Z0-9_-]/g, "");
-          const fileName = `${datePrefix}-${cleanComp || "Empresa"}-CV.md`;
+          const cleanRole = role.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 30);
+          const isGenericComp = !cleanComp || cleanComp.toLowerCase() === "empresa";
+          const baseSlug = isGenericComp
+            ? `${datePrefix}-Empresa-${cleanRole || "Pleno"}`
+            : `${datePrefix}-${cleanComp}-${cleanRole || "Pleno"}`;
+
+          const cvFileName = `${baseSlug}-CV.md`;
+          const pitchFileName = `${baseSlug}-Pitch.md`;
 
           const vagasDir = path.join(vaultPath, "Carreira", "Vagas");
-          const targetFile = path.join(vagasDir, fileName);
+          const targetCvFile = path.join(vagasDir, cvFileName);
+          const targetPitchFile = path.join(vagasDir, pitchFileName);
 
-          const check = validateAllowedPath(targetFile, allowedPaths);
-          if (!check.allowed) {
-            return { success: false, error: check.error };
-          }
+          const checkCv = validateAllowedPath(targetCvFile, allowedPaths);
+          const checkPitch = validateAllowedPath(targetPitchFile, allowedPaths);
+          if (!checkCv.allowed) return { success: false, error: checkCv.error };
+          if (!checkPitch.allowed) return { success: false, error: checkPitch.error };
 
           await fs.mkdir(vagasDir, { recursive: true });
-          await fs.writeFile(targetFile, resumeMarkdown, "utf-8");
 
-          // Atualiza o registro no JSON se existir
+          const pitchMarkdown = buildTailoredPitchAndAtsGuide(
+            company,
+            role,
+            pitch,
+            {
+              matchScore: matchedJob?.matchScore || 80,
+              verdict: matchedJob?.verdict || "Sim",
+              strengths,
+              quickWins,
+              criticalGaps: matchedJob?.criticalGaps || [],
+              keyTechnologies,
+            },
+            cvFileName
+          );
+
+          await fs.writeFile(targetCvFile, resumeMarkdown, "utf-8");
+          await fs.writeFile(targetPitchFile, pitchMarkdown, "utf-8");
+
+          // Atualiza o registro no JSON
+          const nowStr = new Date().toISOString().slice(0, 10);
           if (matchedJob) {
-            matchedJob.cvPath = targetFile;
+            matchedJob.cvPath = targetCvFile;
+            matchedJob.pitchPath = targetPitchFile;
+            matchedJob.status = "cv_gerado";
+            matchedJob.statusUpdatedAt = nowStr;
             await saveAnalyzedJob(vaultPath, matchedJob, allowedPaths);
           }
 
           return {
             success: true,
-            filePath: targetFile,
-            fileName,
+            filePath: targetCvFile,
+            cvFilePath: targetCvFile,
+            cvFileName,
+            pitchFilePath: targetPitchFile,
+            pitchFileName,
             company,
             role,
             pitch,
-            message: `Currículo adaptado e Pitch de Conexão gerados com sucesso em ${fileName}!`,
+            message: `Currículo adaptado (${cvFileName}) e Pitch + Guia ATS (${pitchFileName}) gerados com sucesso! Status da vaga atualizado para 'CV PRONTO'.`,
           };
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
@@ -903,9 +1405,78 @@ export function createCareerTools(
       },
     }),
 
+    update_job_application_status: tool({
+      description:
+        "Atualiza o status de uma candidatura no funil de vagas (Carreira/vagas-analisadas.json). Status aceitos: 'analisada', 'cv_gerado', 'aplicada', 'entrevista', 'rejeitada', 'oferta'.",
+      parameters: z.object({
+        jobId: z
+          .string()
+          .optional()
+          .describe("ID específico da vaga (ex: '2026-10-implanta-desenvolvedor...')."),
+        company: z
+          .string()
+          .optional()
+          .describe("Nome da empresa para localizar a vaga correspondente."),
+        status: z
+          .enum(["analisada", "cv_gerado", "aplicada", "entrevista", "rejeitada", "oferta"])
+          .describe("Novo status da vaga no funil de candidaturas."),
+        notes: z
+          .string()
+          .optional()
+          .describe("Anotações ou observações adicionais sobre o estágio da candidatura."),
+      }),
+      execute: async ({ jobId, company, status, notes }) => {
+        try {
+          if (!jobId && !company) {
+            return {
+              success: false,
+              error: "Informe o jobId ou o nome da empresa para atualizar o status da candidatura.",
+            };
+          }
+
+          await ensureCareerProfileExists(vaultPath, allowedPaths);
+          const jobs = await loadAnalyzedJobs(vaultPath, allowedPaths);
+
+          const matchedJob = jobs.find(
+            (j) => (jobId && j.id === jobId) || (company && j.company.toLowerCase() === company.toLowerCase())
+          );
+
+          if (!matchedJob) {
+            return {
+              success: false,
+              error: `Vaga não encontrada em Carreira/vagas-analisadas.json para ${jobId || company}.`,
+            };
+          }
+
+          const nowStr = new Date().toISOString().slice(0, 10);
+          matchedJob.status = status;
+          matchedJob.statusUpdatedAt = nowStr;
+          if (notes) {
+            matchedJob.notes = notes;
+          }
+
+          await saveAnalyzedJob(vaultPath, matchedJob, allowedPaths);
+
+          return {
+            success: true,
+            jobId: matchedJob.id,
+            company: matchedJob.company,
+            role: matchedJob.role,
+            status,
+            statusUpdatedAt: nowStr,
+            notes: matchedJob.notes,
+            message: `Status da candidatura para ${matchedJob.role} @ ${matchedJob.company} atualizado para '${status.toUpperCase()}'.`,
+          };
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          return { success: false, error: `Falha ao atualizar status da vaga: ${msg}` };
+        }
+      },
+    }),
+
     generate_career_report: tool({
       description:
-        "Analisa o histórico cumulativo de vagas avaliadas em Carreira/vagas-analisadas.json, consolida as tecnologias mais demandadas para o nível Pleno, aponta os gaps de qualificação mais frequentes, elabora uma matriz de estudos priorizada (Esforço vs Impacto) e atualiza a nota executiva Carreira/relatorio-gaps-mercado.md no Obsidian.",
+        "Analisa o histórico cumulativo de vagas avaliadas em Carreira/vagas-analisadas.json, consolida as tecnologias mais demandadas para o nível Pleno, elabora uma matriz de estudos dinâmica priorizada (Esforço vs Impacto) cruzada com materiais do MBA e atualiza a nota executiva Carreira/relatorio-gaps-mercado.md no Obsidian.",
       parameters: z.object({
         updateVaultNote: z
           .boolean()
@@ -927,7 +1498,6 @@ export function createCareerTools(
             };
           }
 
-          // Agregações
           const totalJobs = jobs.length;
           const avgScore = Math.round(
             jobs.reduce((acc, j) => acc + (j.matchScore || 0), 0) / totalJobs
@@ -973,39 +1543,17 @@ export function createCareerTools(
             .slice(0, 5)
             .map(([gap, count]) => ({ gap, count }));
 
-          // Matriz de estudo priorizada
-          const studyMatrix = [
-            {
-              area: "Mensageria & Filas (RabbitMQ / Kafka)",
-              action: "Praticar envio e consumo assíncrono de eventos com DLQ e ack/nack no Node.js",
-              effort: "Médio" as const,
-              marketImpact: "Alto" as const,
-              priority: "Alta" as const,
-            },
-            {
-              area: "Clean Architecture & DDD Prático",
-              action: "Modularizar use cases e entidades desacopladas em microsserviço modelo",
-              effort: "Baixo" as const,
-              marketImpact: "Alto" as const,
-              priority: "Alta" as const,
-            },
-            {
-              area: "Cloud & Conteinerização (AWS / Docker)",
-              action: "Configurar deploy de container com Docker Compose e rotinas de CI/CD",
-              effort: "Médio" as const,
-              marketImpact: "Muito Alto" as const,
-              priority: "Alta" as const,
-            },
-            {
-              area: "Testes Automatizados (TDD)",
-              action: "Aumentar cobertura de testes unitários e de integração com Jest no backend",
-              effort: "Baixo" as const,
-              marketImpact: "Alto" as const,
-              priority: "Alta" as const,
-            },
-          ];
+          // Matriz de estudo dinâmica cruzando com materiais do MBA
+          const { studyMatrix, weeklyStudyFocus } = buildDynamicStudyMatrix(
+            jobs,
+            topSkills,
+            topCriticalGaps,
+            topQuickWins
+          );
 
           const reportDate = new Date().toISOString().slice(0, 10);
+          const kanbanSummary = formatJobPipelineKanban(jobs);
+
           const reportMarkdown =
             `# 📊 Observatório de Mercado & Relatório de Gaps de Carreira\n` +
             `*Atualizado em: ${reportDate} | Amostra: ${totalJobs} vaga(s) analisada(s)*\n\n` +
@@ -1013,6 +1561,7 @@ export function createCareerTools(
             `## 📈 Panorama Geral das Vagas Avaliadas\n` +
             `- **Total de Vagas Analisadas:** ${totalJobs}\n` +
             `- **Média Geral de Aderência:** **${avgScore}%**\n` +
+            `- **Foco de Estudo Recomendado para a Semana:** **${weeklyStudyFocus}**\n` +
             `- **Distribuição de Vereditos:**\n` +
             `  - 🟢 **Sim (Forte Aderência):** ${verdictCounts.sim} (${Math.round((verdictCounts.sim / totalJobs) * 100)}%)\n` +
             `  - 🟡 **Com Ressalvas (Aplicar Estratégico):** ${verdictCounts.comRessalvas} (${Math.round((verdictCounts.comRessalvas / totalJobs) * 100)}%)\n` +
@@ -1026,10 +1575,13 @@ export function createCareerTools(
             `${topQuickWins.map((w) => `- **${w.gap}:** requisitado em ${w.count} vaga(s)`).join("\n") || "- Nenhum gap conceitual recorrente"}\n\n` +
             `---\n\n` +
             `## 🎯 Matriz de Estudos Priorizados (Esforço vs Impacto)\n\n` +
-            `| Área de Estudo | Ação Prática Recomendada | Esforço | Impacto | Prioridade |\n` +
-            `| :--- | :--- | :--- | :--- | :--- |\n` +
-            studyMatrix.map((m) => `| ${m.area} | ${m.action} | ${m.effort} | ${m.marketImpact} | **${m.priority}** |`).join("\n") +
-            `\n\n---\n*Relatório gerado automaticamente pelo copiloto de carreira do Benito.*\n`;
+            `| Área de Estudo | Ação Prática Recomendada | Recursos Locais (MBA / Projetos) | Esforço | Impacto | Prioridade |\n` +
+            `| :--- | :--- | :--- | :--- | :--- | :--- |\n` +
+            studyMatrix.map((m) => `| ${m.area} | ${m.action} | ${m.localResource || "Materiais locais"} | ${m.effort} | ${m.marketImpact} | **${m.priority}** |`).join("\n") +
+            `\n\n---\n\n` +
+            `## 💼 Pipeline de Candidaturas (Funil de Vagas)\n\n` +
+            `\`\`\`\n${kanbanSummary}\`\`\`\n\n` +
+            `---\n*Relatório gerado automaticamente pelo copiloto de carreira do Benito.*\n`;
 
           let notePath = "";
           if (updateVaultNote) {
@@ -1049,6 +1601,8 @@ export function createCareerTools(
             topQuickWins,
             topCriticalGaps,
             studyMatrix,
+            weeklyStudyFocus,
+            kanbanSummary,
             notePath: notePath || undefined,
             reportMarkdown,
           };
