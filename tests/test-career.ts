@@ -278,6 +278,29 @@ async function runCareerTests() {
     const nubankJob = updatedJobs.find((j) => j.company === "Nubank");
     assert.ok(nubankJob?.cvPath);
     assert.strictEqual(nubankJob?.status, "cv_gerado");
+    assert.ok(appRes.cvPdfFilePath && appRes.cvPdfFilePath.endsWith("-CV.pdf"), "Deve retornar cvPdfFilePath (.pdf)");
+    assert.ok(nubankJob?.cvPdfPath && nubankJob.cvPdfPath.endsWith("-CV.pdf"), "Deve salvar cvPdfPath em vagas-analisadas.json");
+    const pdfBuf = await fs.readFile(appRes.cvPdfFilePath);
+    assert.ok(pdfBuf.byteLength > 500, "Arquivo PDF deve ter conteúdo válido (> 500 bytes)");
+    assert.ok(pdfBuf.subarray(0, 7).toString("utf-8").startsWith("%PDF-1."), "Arquivo PDF deve possuir assinatura %PDF-1.");
+    assert.strictEqual(cvFileContent.includes("Empresa Alvo:"), false, "Não deve conter metadados internos no CV");
+    assert.strictEqual(/[\u{1F300}-\u{1FAFF}]/u.test(cvFileContent), false, "Não deve conter emojis robóticos no CV");
+    const idxResumo = cvFileContent.indexOf("## Resumo Profissional");
+    const idxExp = cvFileContent.indexOf("## Experiência Profissional");
+    const idxComp = cvFileContent.indexOf("## Competências Técnicas");
+    const idxForm = cvFileContent.indexOf("## Formação Acadêmica");
+    const idxProj = cvFileContent.indexOf("## Projetos de Engenharia Relevantes");
+    assert.ok(idxResumo < idxExp && idxExp < idxComp && idxComp < idxForm && idxForm < idxProj, "Deve respeitar a ordem aprovada das seções");
+
+    // Testa re-renderização via export_resume_pdf após edição manual no Obsidian
+    const editedMd = cvFileContent.replace("Engenheiro de Software Backend Pleno", "Engenheiro de Software Backend Pleno (Editado Obsidian)");
+    await fs.writeFile(appRes.cvFilePath, editedMd, "utf-8");
+    const exportRes: any = await (tools as any).export_resume_pdf.execute(
+      { company: "Nubank" },
+      { messages: [], toolCallId: "call-export-pdf" }
+    );
+    assert.strictEqual(exportRes.success, true, "export_resume_pdf deve re-gerar o PDF com sucesso");
+    assert.ok(exportRes.sizeBytes > 500, "PDF re-gerado deve possuir tamanho válido");
     console.log(pc.green("✔ CV desacoplado e Pitch + Guia ATS gerados com status atualizado para 'cv_gerado'!"));
 
     // ==========================================

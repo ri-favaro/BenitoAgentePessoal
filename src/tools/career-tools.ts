@@ -5,6 +5,7 @@ import { z } from "zod";
 import { validateAllowedPath } from "./path-guard.js";
 import { cleanMarkdownContent, extractPageText } from "./web-tools.js";
 import { getLanguageModel } from "../core/llm.js";
+import { renderResumeMarkdownToPdf } from "../core/resume-pdf-renderer.js";
 
 export type JobApplicationStatus =
   | "analisada"
@@ -29,6 +30,7 @@ export interface AnalyzedJobRecord {
   criticalGaps: string[];
   keyTechnologies: string[];
   cvPath?: string;
+  cvPdfPath?: string;
   pitchPath?: string;
   status?: JobApplicationStatus;
   statusUpdatedAt?: string;
@@ -891,7 +893,66 @@ export async function buildTailoredResumeMarkdown(
     })
     .join("\n\n");
 
-  return `# Luiz Ricardo Favaro - ${role}
+  return [
+    `# Luiz Ricardo Favaro - ${role}`,
+    `**Localização:** Guarujá, São Paulo | **Contato:** ricardofavaro6@gmail.com | (13) 98174-8698`,
+    `**Perfis:** [LinkedIn](https://www.linkedin.com/in/ri-favaro/) | [GitHub](https://github.com/ri-favaro)`,
+    ``,
+    `---`,
+    ``,
+    `## Resumo Profissional`,
+    ``,
+    summary,
+    ``,
+    `---`,
+    ``,
+    `## Experiência Profissional`,
+    ``,
+    `#### **Contele** | *Desenvolvedor de Integrações · Foco em IA e Automações*`,
+    `*Santos, SP | abr/2026 – atual*`,
+    `- Desenvolvimento de integrações críticas e automações de processos de negócio com **Node.js**, **TypeScript** e **N8N**.`,
+    `- Automação completa ponta a ponta do fluxo de postagem dos **Correios** via APIs REST externas (pré-postagem, geração automatizada de etiquetas em PDF e dashboard de rastreamento).`,
+    `- Aplicação prática de **LLMs (Anthropic Claude)** em fluxos produtivos de automação inteligente e triagem de dados.`,
+    `- Desenvolvimento fullstack na plataforma **CONTELE-OS** utilizando **Next.js**, **React**, **TypeScript** e **Supabase (PostgreSQL)** com migrações versionadas e validação estrita via **Zod**.`,
+    `- Implementação de testes unitários com **Jest** e atuação em equipe ágil com metodologia **Kanban**.`,
+    ``,
+    `#### **O Especialista** | *Suporte de TI & Infraestrutura*`,
+    `*Guarujá, SP | jun/2024 – dez/2024 (6 meses)*`,
+    `- Prestação de suporte técnico nível 1 e 2 presencial e remoto para 4 a 5 empresas clientes simultâneas.`,
+    `- Diagnóstico e reparo de hardware, configuração de redes locais e resolução de incidentes críticos de TI com foco em agilidade e SLA.`,
+    ``,
+    `---`,
+    ``,
+    `## Competências Técnicas`,
+    ``,
+    skillsList.join("\n"),
+    ``,
+    `---`,
+    ``,
+    `## Formação Acadêmica`,
+    ``,
+    `- **MBA em Engenharia de Software** | *Universidade de São Paulo (USP / ESALQ)* — Em andamento`,
+    `  - Módulos avançados: Clean Architecture, DDD, Mensageria Assíncrona (RabbitMQ/Kafka), Microsserviços e TDD.`,
+    `- **Bacharelado em Engenharia da Computação** | *Universidade Santa Cecília (UNISANTA)* — Concluído em 2024`,
+    `  - Autor de artigo publicado no congresso científico COBRICS 2024; nota máxima (10) no TCC de jogos lúdicos com ESP32 e Firebase.`,
+    ``,
+    `---`,
+    ``,
+    `## Projetos de Engenharia Relevantes`,
+    ``,
+    projectsMarkdown,
+    ``,
+    `---`,
+    ``,
+    `## Idiomas`,
+    ``,
+    `- **Português:** Nativo`,
+    `- **Inglês:** Avançado`,
+    `- **Espanhol:** Intermediário`,
+    ``,
+  ].join("\n");
+}
+function _unusedOldResumeEnd(company = "", dateStr = "", summary = "", skillsList: string[] = [], projectsMarkdown = "") { return `# unused
 **Empresa Alvo:** ${company} | **Data da Versão:** ${dateStr}
 **Localização:** Guarujá, São Paulo | **Contato:** ricardofavaro6@gmail.com | (13) 98174-8698
 **Perfis:** [LinkedIn](https://www.linkedin.com/in/ri-favaro/) | [GitHub](https://github.com/ri-favaro)
@@ -1373,7 +1434,113 @@ export function createCareerTools(
             cvFileName
           );
 
-          await fs.writeFile(targetCvFile, resumeMarkdown, "utf-8");
+  const cvPdfFileName = `${baseSlug}-CV.pdf`;
+  const targetCvPdfFile = path.join(vagasDir, cvPdfFileName);
+  await fs.writeFile(targetCvFile, resumeMarkdown, "utf-8");
+  await fs.writeFile(targetPitchFile, pitchMarkdown, "utf-8");
+  const pdfResult = await renderResumeMarkdownToPdf({
+    markdownContent: resumeMarkdown,
+    outputPdfPath: targetCvPdfFile,
+    roleTitle: role,
+  });
+  const nowStr = new Date().toISOString().slice(0, 10);
+  if (matchedJob) {
+    matchedJob.cvPath = targetCvFile;
+    matchedJob.cvPdfPath = pdfResult.success ? targetCvPdfFile : undefined;
+    matchedJob.pitchPath = targetPitchFile;
+    matchedJob.status = "cv_gerado";
+    matchedJob.statusUpdatedAt = nowStr;
+    await saveAnalyzedJob(vaultPath, matchedJob, allowedPaths);
+  }
+  return {
+    success: true,
+    filePath: targetCvFile,
+    cvFilePath: targetCvFile,
+    cvFileName,
+    cvPdfFilePath: targetCvPdfFile,
+    cvPdfFileName,
+    pdfEngine: pdfResult.engine,
+    pitchFilePath: targetPitchFile,
+    pitchFileName,
+    company,
+    role,
+    pitch,
+    message: `Currículo adaptado (${cvFileName} + ${cvPdfFileName}) e Pitch + Guia ATS (${pitchFileName}) gerados com sucesso! Status da vaga atualizado para 'CV PRONTO'.`,
+  };
+} catch (error) {
+  const msg = error instanceof Error ? error.message : String(error);
+  return { success: false, error: `Falha ao gerar currículo e pitch adaptados: ${msg}` };
+}
+      },
+    }),
+    export_resume_pdf: tool({
+      description:
+        "Converte ou atualiza o arquivo PDF (YYYY-MM-Empresa-Cargo-CV.pdf) a partir do arquivo Markdown correspondente (-CV.md) em Carreira/Vagas/, útil após o usuário editar manualmente o currículo no Obsidian.",
+      parameters: z.object({
+        company: z.string().optional().describe("Nome da empresa para localizar o currículo em Carreira/Vagas/."),
+        jobId: z.string().optional().describe("ID da vaga em vagas-analisadas.json."),
+        cvMarkdownPath: z.string().optional().describe("Caminho direto do arquivo -CV.md no cofre do Obsidian."),
+        roleTitle: z.string().optional().describe("Subtítulo/cargo opcional para exibir no cabeçalho do PDF."),
+      }),
+      execute: async ({ company, jobId, cvMarkdownPath, roleTitle }) => {
+        try {
+          await ensureCareerProfileExists(vaultPath, allowedPaths);
+          const jobs = await loadAnalyzedJobs(vaultPath, allowedPaths);
+          const matchedJob = jobs.find(
+            (j) =>
+              (jobId && j.id === jobId) ||
+              (company && j.company.toLowerCase() === company.toLowerCase())
+          );
+          let resolvedMdPath = cvMarkdownPath || matchedJob?.cvPath || "";
+          if (!resolvedMdPath && company) {
+            const vagasDir = path.join(vaultPath, "Carreira", "Vagas");
+            const files = await fs.readdir(vagasDir).catch(() => [] as string[]);
+            const cleanComp = company.replace(/[^a-zA-Z0-9_-]/g, "").toLowerCase();
+            const found = files.find(
+              (f) => f.endsWith("-CV.md") && f.toLowerCase().includes(cleanComp)
+            );
+            if (found) resolvedMdPath = path.join(vagasDir, found);
+          }
+          if (!resolvedMdPath) {
+            return {
+              success: false,
+              error: "Arquivo -CV.md não localizado. Informe o nome da empresa, jobId ou caminho do arquivo Markdown.",
+            };
+          }
+          const checkMd = validateAllowedPath(resolvedMdPath, allowedPaths);
+          if (!checkMd.allowed) return { success: false, error: checkMd.error };
+          const mdContent = await fs.readFile(resolvedMdPath, "utf-8");
+          const targetPdfPath = resolvedMdPath.replace(/\.md$/i, ".pdf");
+          const checkPdf = validateAllowedPath(targetPdfPath, allowedPaths);
+          if (!checkPdf.allowed) return { success: false, error: checkPdf.error };
+          const renderRes = await renderResumeMarkdownToPdf({
+            markdownContent: mdContent,
+            outputPdfPath: targetPdfPath,
+            roleTitle: roleTitle || matchedJob?.role,
+          });
+          if (!renderRes.success) {
+            return { success: false, error: renderRes.error || "Falha ao renderizar PDF." };
+          }
+          if (matchedJob) {
+            matchedJob.cvPdfPath = targetPdfPath;
+            await saveAnalyzedJob(vaultPath, matchedJob, allowedPaths);
+          }
+          return {
+            success: true,
+            cvFilePath: resolvedMdPath,
+            cvPdfFilePath: targetPdfPath,
+            cvPdfFileName: path.basename(targetPdfPath),
+            sizeBytes: renderRes.sizeBytes,
+            engine: renderRes.engine,
+            message: `PDF atualizado com sucesso em ${path.basename(targetPdfPath)} (${renderRes.sizeBytes} bytes).`,
+          };
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          return { success: false, error: `Erro ao exportar PDF do currículo: ${msg}` };
+        }
+      },
+    }),
+      /* _legacySkip start
           await fs.writeFile(targetPitchFile, pitchMarkdown, "utf-8");
 
           // Atualiza o registro no JSON
@@ -1405,7 +1572,7 @@ export function createCareerTools(
       },
     }),
 
-    update_job_application_status: tool({
+      _legacySkip end */ update_job_application_status: tool({
       description:
         "Atualiza o status de uma candidatura no funil de vagas (Carreira/vagas-analisadas.json). Status aceitos: 'analisada', 'cv_gerado', 'aplicada', 'entrevista', 'rejeitada', 'oferta'.",
       parameters: z.object({

@@ -157,6 +157,14 @@ export function formatToolFeedback(
     }
     case "generate_tailored_application": {
       const comp = typeof args.company === "string" ? args.company : "vaga";
+      return `📄 Gerando currículo adaptado (.md + .pdf) e pitch [${comp}]...`;
+    }
+    case "export_resume_pdf": {
+      const comp = typeof args.company === "string" ? args.company : "currículo";
+      return `📄 Exportando currículo atualizado em PDF [${comp}]...`;
+    }
+    case "_old_generate_tailored": {
+      const comp = typeof args.company === "string" ? args.company : "vaga";
       return `📄 Gerando currículo adaptado e pitch de abordagem [${comp}]...`;
     }
     case "generate_career_report": {
