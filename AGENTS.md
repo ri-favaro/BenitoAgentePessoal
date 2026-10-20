@@ -38,6 +38,7 @@ Este documento orienta desenvolvedores e agentes de IA que forem trabalhar na ma
 ```
 src/
 ├── cli.ts            # Ponto de entrada CLI interativo (suporte a paste multi-linha)
+├── launcher.ts       # Central de inicialização interativa (CLI, Telegram, Cron ou Completo)
 ├── config.ts         # Configuração centralizada e tipada do ambiente (.env)
 ├── core/             # Núcleo cognitivo e de infraestrutura
 │   ├── agent.ts            # Orquestração do agente (PersonalAgent)
@@ -48,6 +49,8 @@ src/
 │   ├── vector-store.ts     # Persistência e busca vetorial com LanceDB (.lancedb/)
 │   ├── indexer.ts          # Indexador incremental (chunking por AST/tópicos + hash SHA-256)
 │   ├── github-service.ts   # Integração com GitHub REST API (issues/labels)
+│   ├── github-service.ts   # Integração com GitHub REST API (issues/labels)
+│   ├── service-manager.ts  # Orquestrador de dependências (Ollama, llama-server, SearXNG/Tavily)
 │   └── self-auditor.ts     # Auditoria de raciocínio, sandbox e cobertura de testes
 ├── interfaces/       # Adaptadores de comunicação e interface
 │   ├── telegram.ts         # Bot do Telegram (comandos, streaming e gestão de sessão)
@@ -75,7 +78,9 @@ src/
 │   └── memory-tools.ts        # Ferramentas para o modelo persistir fatos e aprendizados
 scripts/              # Utilitários de inicialização e manutenção
 ├── start-embedding-server.ps1 # Launcher do llama-server com consumo otimizado (270MB RAM)
-└── index-knowledge.ts         # Script CLI para disparar indexação em lote (npm run index)
+├── start-embedding-server.ps1   # Launcher do llama-server com consumo otimizado (270MB RAM)
+├── install-desktop-launcher.ps1 # Compilador do Benito.exe nativo (Job Object + ícone) para Área de Trabalho
+└── index-knowledge.ts           # Script CLI para disparar indexação em lote (npm run index)
 .lancedb/             # Armazenamento vetorial local embutido (tabelas: codebase, vault)
 logs/                 # Auditoria contínua de raciocínio e intenções (reasoning.log JSONL)
 tests/                # Suíte de testes automatizados (12 suítes com 100% de cobertura funcional)
@@ -228,7 +233,10 @@ Ao manter ou evoluir recursos em `src/tools/career-tools.ts`:
 | `npm run index` | Dispara a indexação incremental do codebase e cofre Obsidian |
 | `npm run build` | Compila o projeto com o TypeScript (`tsc`) |
 | `npm test` | Executa a suíte completa de testes automatizados (todas as 13 suítes) |
-| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`, `automation`, `obsidian`, `orchestration`, `career`) |
+| `npm run launcher` | Abre a Central de Inicialização (sobe dependências + menu CLI/Telegram/Cron) |
+| `npm run desktop:install` | Compila e instala o executável `Benito.exe` na Área de Trabalho |
+| `npm test` | Executa a suíte completa de testes automatizados (todas as 14 suítes) |
+| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`, `automation`, `obsidian`, `orchestration`, `career`, `launcher`) |
 
 ### Regras Gerais
 - **Idioma de Commits:** Sempre em **Português do Brasil (pt-br)** com Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.).
