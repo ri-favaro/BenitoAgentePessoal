@@ -21,3 +21,4 @@ Thumbs.db
 # Dados e Modelos Locais (Embeddings & LanceDB)
 .lancedb/
 .models/
+Benito.exe

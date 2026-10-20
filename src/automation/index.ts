@@ -49,15 +49,22 @@ export function createAutomationScheduler(bot?: Bot): TaskScheduler {
 }
 
 /**
- * Ponto de entrada para execução standalone (npm run automation)
+ * Ponto de entrada para execução standalone (npm run automation) ou via Launcher
  */
-async function main() {
+export async function startAutomationService(
+  options: { handleSignals?: boolean } = {}
+): Promise<{ stop: () => void }> {
   console.log("\n" + pc.bold(pc.cyan("==================================================")));
   console.log(pc.bold(pc.cyan("       BENITO - MOTOR DE AUTOMAÇÕES & JOBS        ")));
   console.log(pc.bold(pc.cyan("==================================================")));
-  console.log(pc.gray(`• Status do Digest:    `) + (config.automation.digestEnabled ? pc.green("Habilitado") : pc.red("Desabilitado")));
+  console.log(
+    pc.gray(`• Status do Digest:    `) +
+      (config.automation.digestEnabled ? pc.green("Habilitado") : pc.red("Desabilitado"))
+  );
   console.log(pc.gray(`• Expressão Cron:      `) + pc.yellow(config.automation.digestCronSchedule));
-  console.log(pc.gray(`• Tópicos de Notícias: `) + pc.blue(config.automation.digestTopics.join(", ")));
+  console.log(
+    pc.gray(`• Tópicos de Notícias: `) + pc.blue(config.automation.digestTopics.join(", "))
+  );
   console.log(
     pc.gray(`• Destinatários (TG):  `) +
       (config.telegram.allowedUserIds.length > 0
@@ -78,15 +85,21 @@ async function main() {
     process.exit(0);
   };
 
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
+  if (options.handleSignals !== false) {
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  }
+
+  return { stop: () => scheduler.stopAll() };
 }
 
 // Se executado diretamente pelo Node/tsx
-if (process.argv[1]?.endsWith("automation/index.ts") || process.argv[1]?.endsWith("automation/index.js")) {
-  main().catch((err) => {
+if (
+  process.argv[1]?.replace(/\\/g, "/").endsWith("automation/index.ts") ||
+  process.argv[1]?.replace(/\\/g, "/").endsWith("automation/index.js")
+) {
+  startAutomationService().catch((err) => {
     console.error(pc.red("Erro crítico no motor de automações:"), err);
     process.exit(1);
   });
 }
-

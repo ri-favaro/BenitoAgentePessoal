@@ -54,7 +54,7 @@ async function readInputWithPasteSupport(
   });
 }
 
-async function main() {
+export async function startCli(): Promise<void> {
   const agent = new PersonalAgent();
   const financeTools = createFinanceTools(config.finance.financeDir, config.filesystem.allowedPaths);
   const obsidianTools = createObsidianTools(
@@ -757,7 +757,8 @@ async function main() {
   rl.close();
 }
 
-main().catch((err) => {
+const isCliDirectRun = process.argv[1]?.replace(/\\/g, "/").endsWith("src/cli.ts") || process.argv[1]?.replace(/\\/g, "/").endsWith("dist/cli.js");
+if (isCliDirectRun) startCli().catch((err) => {
   console.error("Falha ao iniciar o agente:", err);
   process.exit(1);
 });

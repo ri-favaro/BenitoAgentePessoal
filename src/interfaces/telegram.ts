@@ -26,7 +26,12 @@ import {
   type JobApplicationStatus,
 } from "../tools/career-tools.js";
 
-async function main() {
+export interface TelegramBotHandle {
+  stop: () => void;
+  promise: Promise<void>;
+}
+
+export async function startTelegramBot(options: { handleSignals?: boolean; background?: boolean } = {}): Promise<TelegramBotHandle> {
   if (!config.telegram.botToken) {
     console.error(pc.red("\n✖ Erro: TELEGRAM_BOT_TOKEN não foi configurado no arquivo .env!\n"));
     console.log(pc.yellow("Para configurar o bot do Telegram:"));
@@ -899,14 +904,18 @@ async function main() {
     process.exit(0);
   };
 
-  process.once("SIGINT", stopHandler);
-  process.once("SIGTERM", stopHandler);
+  if (options.handleSignals !== false) process.once("SIGINT", stopHandler);
+  if (options.handleSignals !== false) process.once("SIGTERM", stopHandler);
 
   // Inicia o bot via Long Polling
-  await bot.start();
+  const stopResources = () => { scheduler.stopAll(); try { bot.stop(); } catch {} };
+  const pollingPromise = bot.start();
+  if (!options.background) await pollingPromise;
+  return { stop: stopResources, promise: pollingPromise };
 }
 
-main().catch((err) => {
+const isTelegramDirectRun = process.argv[1]?.replace(/\\/g, "/").endsWith("interfaces/telegram.ts") || process.argv[1]?.replace(/\\/g, "/").endsWith("interfaces/telegram.js");
+if (isTelegramDirectRun) startTelegramBot().catch((err) => {
   console.error(pc.red("Falha crítica ao iniciar o Telegram Bot:"), err);
   process.exit(1);
 });
