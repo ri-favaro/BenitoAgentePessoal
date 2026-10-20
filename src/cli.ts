@@ -464,7 +464,17 @@ export async function startCli(): Promise<void> {
 
       if (trimmed === "/carreira" || trimmed.startsWith("/carreira ")) {
         const sub = trimmed.replace("/carreira", "").trim().toLowerCase();
-        if (sub.startsWith("status ")) {
+        if (sub.startsWith("pdf ")) {
+          const targetComp = trimmed.replace(/^\/carreira\s+pdf\s+/i, "").trim();
+          console.log(pc.cyan(`\n[📄 Exportando PDF atualizado do currículo para '${targetComp}'...]`));
+          try {
+            const res: any = await (careerTools.export_resume_pdf as any).execute({ company: targetComp });
+            if (res.success) console.log(pc.green(`\n✔ ${res.message}\n  • Arquivo: ${res.cvPdfFilePath}\n`));
+            else console.log(pc.red(`\n✖ ${res.error}\n`));
+          } catch (error) {
+            console.log(pc.red(`\n✖ Erro ao exportar PDF: ${error instanceof Error ? error.message : String(error)}\n`));
+          }
+        } else if (sub.startsWith("status ")) {
           const rawArgs = trimmed.replace(/^\/carreira\s+status\s+/i, "").trim();
           const parts = rawArgs.split(/\s+/);
           if (parts.length < 2) {

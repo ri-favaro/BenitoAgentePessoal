@@ -1,5 +1,6 @@
 import path from "node:path";
-import { Bot } from "grammy";
+import fsSync from "node:fs";
+import { Bot, InputFile } from "grammy";
 import pc from "picocolors";
 import { PersonalAgent } from "../core/agent.js";
 import { config } from "../config.js";
@@ -500,6 +501,21 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
       const text = ctx.message?.text || "";
       const args = text.replace(/^\/carreira(@\w+)?/i, "").trim().toLowerCase();
 
+      if (args.startsWith("pdf ")) {
+        const targetComp = text.replace(/^\/carreira(@\w+)?\s+pdf\s+/i, "").trim();
+        if (!targetComp) {
+          await ctx.reply("💼 *Uso:* `/carreira pdf <empresa>`", { parse_mode: "Markdown" });
+          return;
+        }
+        const res: any = await (careerTools.export_resume_pdf as any).execute({ company: targetComp });
+        if (res.success && res.cvPdfFilePath && fsSync.existsSync(res.cvPdfFilePath)) {
+          await ctx.reply(`✔ *${res.message}*`, { parse_mode: "Markdown" });
+          await ctx.replyWithDocument(new InputFile(res.cvPdfFilePath));
+        } else {
+          await ctx.reply(`❌ ${res.error || "Não foi possível exportar o PDF."}`);
+        }
+        return;
+      }
       if (args.startsWith("status ")) {
         const raw = text.replace(/^\/carreira(@\w+)?\s+status\s+/i, "").trim();
         const parts = raw.split(/\s+/);
@@ -764,6 +780,7 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
       try {
         console.log(pc.cyan(`\n[Telegram] Mensagem recebida: "${userInput}"`));
 
+        let pdfCompanyTriggered = "";
         const finalResult = await agent.ask(userInput, {
           onThoughtToken: (_thoughtChunk) => {
             // Silencia os tokens de monólogo interno no chat do Telegram,
@@ -774,6 +791,7 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
             scheduleEdit(false);
           },
           onToolCall: (toolName, args) => {
+            if (toolName === "generate_tailored_application" || toolName === "export_resume_pdf") pdfCompanyTriggered = String((args as any)?.company || (args as any)?.jobId || "recent");
             activeToolStatus = formatToolFeedback(toolName, args);
             console.log(pc.dim(`[Telegram Tool] ${activeToolStatus}`));
             scheduleEdit(true);
@@ -831,6 +849,19 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
           }
         }
 
+        if (pdfCompanyTriggered) {
+          try {
+            const jobs = await loadAnalyzedJobs(config.obsidian.vaultPath, config.filesystem.allowedPaths);
+            const matched = jobs.find((j) => j.company.toLowerCase().includes(pdfCompanyTriggered.toLowerCase()) || j.id === pdfCompanyTriggered) || jobs[jobs.length - 1];
+            if (matched?.cvPdfPath && fsSync.existsSync(matched.cvPdfPath)) {
+              await ctx.replyWithDocument(new InputFile(matched.cvPdfPath), {
+                caption: `📄 Currículo em PDF pronto para upload ATS (${path.basename(matched.cvPdfPath)})`,
+              });
+            }
+          } catch (pdfSendErr) {
+            console.error(pc.yellow("[Telegram] Aviso ao anexar PDF do currículo:"), pdfSendErr);
+          }
+        }
         console.log(pc.green(`[Telegram] Resposta entregue com sucesso (${finalText.length} caracteres).`));
       } catch (err: unknown) {
         isDone = true;
