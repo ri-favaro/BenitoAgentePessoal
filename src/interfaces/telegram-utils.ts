@@ -309,3 +309,100 @@ export class SessionTracker {
   }
 }
 
+/**
+ * Extrai o tempo de espera (retry_after em segundos) de um erro do Telegram (ex: HTTP 429).
+ * Suporta grammY Error (error.parameters.retry_after) ou regex no message: "retry after (\d+)".
+ */
+export function parseTelegramRetryAfter(err: unknown): number | null {
+  if (!err) return null;
+
+  // Checa parameters.retry_after (nativo do grammY / Bot API)
+  if (typeof err === "object" && err !== null) {
+    const params = (err as any).parameters;
+    if (params && typeof params.retry_after === "number" && params.retry_after > 0) {
+      return params.retry_after;
+    }
+  }
+
+  // Fallback via regex na mensagem de erro
+  const message = err instanceof Error ? err.message : String(err);
+  const match = message.match(/retry after (\d+)/i);
+  if (match && match[1]) {
+    const val = parseInt(match[1], 10);
+    if (!Number.isNaN(val) && val > 0) {
+      return val;
+    }
+  }
+
+  // Se o erro menciona 429 / Too Many Requests mas sem número explícito
+  if (message.includes("429") || message.toLowerCase().includes("too many requests")) {
+    return 30; // Cooldown defensivo padrão de 30 segundos
+  }
+
+  return null;
+}
+
+/**
+ * Gerenciador de Rate Limit / Flood Wait para o Telegram Bot.
+ * Mantém o registro de cooldowns ativos por chat ou globais para evitar
+ * bombardeio repetido da API do Telegram após receber 429.
+ */
+export class TelegramRateLimiter {
+  private chatCooldowns = new Map<number, number>();
+  private globalCooldownUntil = 0;
+
+  /**
+   * Define um período de cooldown para um chat específico em segundos.
+   */
+  setChatCooldown(chatId: number, seconds: number, now: number = Date.now()): void {
+    this.chatCooldowns.set(chatId, now + seconds * 1000);
+  }
+
+  /**
+   * Define um período de cooldown global em segundos.
+   */
+  setGlobalCooldown(seconds: number, now: number = Date.now()): void {
+    this.globalCooldownUntil = now + seconds * 1000;
+  }
+
+  /**
+   * Verifica se o chat especificado ou o bot globalmente está em cooldown de edição/requisição.
+   */
+  isRateLimited(chatId: number, now: number = Date.now()): boolean {
+    if (this.globalCooldownUntil > now) {
+      return true;
+    }
+    const chatUntil = this.chatCooldowns.get(chatId);
+    if (chatUntil && chatUntil > now) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Retorna os segundos restantes de cooldown para um chat (0 se não estiver limitado).
+   */
+  getRemainingSeconds(chatId: number, now: number = Date.now()): number {
+    const chatUntil = this.chatCooldowns.get(chatId) || 0;
+    const targetUntil = Math.max(chatUntil, this.globalCooldownUntil);
+    if (targetUntil <= now) return 0;
+    return Math.ceil((targetUntil - now) / 1000);
+  }
+
+  /**
+   * Reseta o cooldown para um chat.
+   */
+  clearChat(chatId: number): void {
+    this.chatCooldowns.delete(chatId);
+  }
+
+  /**
+   * Limpa todos os cooldowns registrados.
+   */
+  clearAll(): void {
+    this.chatCooldowns.clear();
+    this.globalCooldownUntil = 0;
+  }
+}
+
+

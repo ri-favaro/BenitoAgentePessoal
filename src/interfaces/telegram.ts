@@ -10,6 +10,8 @@ import {
   splitTelegramMessage,
   formatToolFeedback,
   SessionTracker,
+  parseTelegramRetryAfter,
+  TelegramRateLimiter,
 } from "./telegram-utils.js";
 import { SelfAuditor } from "../core/self-auditor.js";
 import { KnowledgeIndexer } from "../core/indexer.js";
@@ -56,6 +58,7 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
   const vectorStore = new VectorStore();
   const indexer = new KnowledgeIndexer(embeddingService, vectorStore);
   const sessionTracker = new SessionTracker(config.telegram.sessionTimeoutMinutes);
+  const rateLimiter = new TelegramRateLimiter();
   const bot = new Bot(config.telegram.botToken);
   const scheduler = createAutomationScheduler(bot);
   scheduler.startAll();
@@ -676,9 +679,24 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
       let lastSentText = "⏳ Benito está pensando...";
       let editPending = false;
       let editTimer: NodeJS.Timeout | null = null;
+      let isEditing = false;
+      let messageDelivered = false;
+
+      const EDIT_THROTTLE_MS = 2500;
 
       const performEdit = async (isFinal = false) => {
-        if (!placeholderMsg) return;
+        if (!placeholderMsg || messageDelivered) return;
+
+        // Se o chat estiver em cooldown por 429, não tenta editar
+        if (rateLimiter.isRateLimited(chatId)) {
+          return;
+        }
+
+        // Se já houver uma chamada editMessageText em voo, sinaliza pendência e aguarda
+        if (isEditing) {
+          editPending = true;
+          return;
+        }
 
         let contentToDisplay = accumulatedTokens.trim();
         if (activeToolStatus && !contentToDisplay) {
@@ -701,6 +719,7 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
           contentToDisplay = contentToDisplay.slice(0, 3950) + "\n... [continua]";
         }
 
+        isEditing = true;
         try {
           if (isFinal) {
             await ctx.api.editMessageText(
@@ -719,6 +738,16 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
                 { parse_mode: "Markdown" }
               );
             } catch (mdErr: any) {
+              const retryAfter = parseTelegramRetryAfter(mdErr);
+              if (retryAfter) {
+                rateLimiter.setChatCooldown(chatId, retryAfter);
+                console.warn(
+                  pc.yellow(
+                    `[Telegram] ⚠️ Rate limit (429) detectado no chat ${chatId}. Pausando edições por ${retryAfter}s.`
+                  )
+                );
+                return;
+              }
               const mdMsg = mdErr?.message || "";
               if (mdMsg.includes("message is not modified")) {
                 lastSentText = contentToDisplay;
@@ -734,34 +763,56 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
           lastSentText = contentToDisplay;
           lastEditTime = Date.now();
         } catch (editErr: any) {
+          const retryAfter = parseTelegramRetryAfter(editErr);
+          if (retryAfter) {
+            rateLimiter.setChatCooldown(chatId, retryAfter);
+            console.warn(
+              pc.yellow(
+                `[Telegram] ⚠️ Rate limit (429) detectado no chat ${chatId}. Pausando edições por ${retryAfter}s.`
+              )
+            );
+            return;
+          }
+
           const errMsg = editErr?.message || "";
           if (errMsg.includes("message is not modified")) {
             lastSentText = contentToDisplay;
             return;
           }
-          if (!errMsg.includes("retry after")) {
-            // Fallback para edição sem markdown
-            try {
-              await ctx.api.editMessageText(
-                chatId,
-                placeholderMsg.message_id,
-                contentToDisplay
-              );
-              lastSentText = contentToDisplay;
-              lastEditTime = Date.now();
-            } catch (fallbackErr: any) {
-              const fbMsg = fallbackErr?.message || "";
-              if (fbMsg.includes("message is not modified")) {
-                lastSentText = contentToDisplay;
-              }
+          // Fallback para edição sem markdown
+          try {
+            await ctx.api.editMessageText(
+              chatId,
+              placeholderMsg.message_id,
+              contentToDisplay
+            );
+            lastSentText = contentToDisplay;
+            lastEditTime = Date.now();
+          } catch (fallbackErr: any) {
+            const fbRetry = parseTelegramRetryAfter(fallbackErr);
+            if (fbRetry) {
+              rateLimiter.setChatCooldown(chatId, fbRetry);
+              return;
             }
+            const fbMsg = fallbackErr?.message || "";
+            if (fbMsg.includes("message is not modified")) {
+              lastSentText = contentToDisplay;
+            }
+          }
+        } finally {
+          isEditing = false;
+          if (editPending && !isFinal && !messageDelivered && !rateLimiter.isRateLimited(chatId)) {
+            editPending = false;
+            scheduleEdit(false);
           }
         }
       };
 
       const scheduleEdit = (force = false) => {
+        if (messageDelivered || rateLimiter.isRateLimited(chatId)) return;
+
         const elapsed = Date.now() - lastEditTime;
-        if (force || elapsed >= 1500) {
+        if ((force || elapsed >= EDIT_THROTTLE_MS) && !isEditing) {
           if (editTimer) {
             clearTimeout(editTimer);
             editTimer = null;
@@ -770,10 +821,11 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
           performEdit(false);
         } else if (!editPending) {
           editPending = true;
+          const delay = Math.max(0, EDIT_THROTTLE_MS - elapsed);
           editTimer = setTimeout(() => {
             editPending = false;
             performEdit(false);
-          }, 1500 - elapsed);
+          }, delay);
         }
       };
 
@@ -805,9 +857,13 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
         const finalText = finalResult.trim() || accumulatedTokens.trim() || "(Sem resposta gerada)";
         const chunks = splitTelegramMessage(finalText, 4000);
 
-        // Edita a mensagem inicial com a primeira parte (apenas se o texto for diferente do já exibido)
-        if (placeholderMsg && chunks.length > 0) {
-          if (chunks[0] !== lastSentText) {
+        let firstChunkDelivered = false;
+
+        // Se o chat NÃO estiver em cooldown e temos placeholder, tenta editar a mensagem inicial com chunks[0]
+        if (placeholderMsg && chunks.length > 0 && !rateLimiter.isRateLimited(chatId)) {
+          if (chunks[0] === lastSentText) {
+            firstChunkDelivered = true;
+          } else {
             try {
               await ctx.api.editMessageText(
                 chatId,
@@ -815,38 +871,67 @@ export async function startTelegramBot(options: { handleSignals?: boolean; backg
                 chunks[0],
                 { parse_mode: "Markdown" }
               );
+              firstChunkDelivered = true;
               lastSentText = chunks[0];
             } catch (finalMdErr: any) {
-              const mdMsg = finalMdErr?.message || "";
-              if (mdMsg.includes("message is not modified")) {
-                lastSentText = chunks[0];
+              const retryAfter = parseTelegramRetryAfter(finalMdErr);
+              if (retryAfter) {
+                rateLimiter.setChatCooldown(chatId, retryAfter);
+                console.warn(
+                  pc.yellow(
+                    `[Telegram] ⚠️ Rate limit (429) ao finalizar edição no chat ${chatId}. Ativando fallback para nova mensagem.`
+                  )
+                );
               } else {
-                try {
-                  await ctx.api.editMessageText(
-                    chatId,
-                    placeholderMsg.message_id,
-                    chunks[0]
-                  );
+                const mdMsg = finalMdErr?.message || "";
+                if (mdMsg.includes("message is not modified")) {
+                  firstChunkDelivered = true;
                   lastSentText = chunks[0];
-                } catch (plainErr: any) {
-                  const plainMsg = plainErr?.message || "";
-                  if (!plainMsg.includes("message is not modified")) {
-                    throw plainErr;
+                } else {
+                  try {
+                    await ctx.api.editMessageText(
+                      chatId,
+                      placeholderMsg.message_id,
+                      chunks[0]
+                    );
+                    firstChunkDelivered = true;
+                    lastSentText = chunks[0];
+                  } catch (plainErr: any) {
+                    const plainRetry = parseTelegramRetryAfter(plainErr);
+                    if (plainRetry) {
+                      rateLimiter.setChatCooldown(chatId, plainRetry);
+                    }
+                    const plainMsg = plainErr?.message || "";
+                    if (plainMsg.includes("message is not modified")) {
+                      firstChunkDelivered = true;
+                      lastSentText = chunks[0];
+                    }
                   }
-                  lastSentText = chunks[0];
                 }
               }
             }
           }
         }
 
+        // Se a primeira parte não pôde ser entregue por edição (429 ou erro), envia como nova mensagem!
+        if (!firstChunkDelivered && chunks.length > 0) {
+          console.log(
+            pc.cyan(
+              `[Telegram] Entregando resposta como nova mensagem (fallback de rate limit/edição)...`
+            )
+          );
+          if (placeholderMsg) {
+            ctx.api.deleteMessage(chatId, placeholderMsg.message_id).catch(() => {});
+          }
+          await safeReply(ctx, chunks[0], { parse_mode: "Markdown" });
+          firstChunkDelivered = true;
+        }
+
+        messageDelivered = true;
+
         // Se houver mais de uma parte (>4000 caracteres), envia as restantes em novas mensagens
         for (let i = 1; i < chunks.length; i++) {
-          try {
-            await ctx.reply(chunks[i], { parse_mode: "Markdown" });
-          } catch {
-            await ctx.reply(chunks[i]);
-          }
+          await safeReply(ctx, chunks[i], { parse_mode: "Markdown" });
         }
 
         if (pdfCompanyTriggered) {
