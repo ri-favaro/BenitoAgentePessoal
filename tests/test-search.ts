@@ -85,6 +85,18 @@ async function runTests() {
       console.error(pc.red("✖ Falha na busca real via Tavily:"), tavilyLive);
       process.exit(1);
     }
+
+    console.log(pc.yellow("1.2 Testando busca de notícias recentes no Tavily (topic: 'news', days: 3)..."));
+    const tavilyNews = await tools.search_web.execute(
+      { query: "Artificial Intelligence", numResults: 2, topic: "news", days: 3, timeRange: "day" },
+      { messages: [], toolCallId: "test-tavily-news" }
+    );
+    if (tavilyNews.success && tavilyNews.summary) {
+      console.log(pc.green("✔ Busca de notícias recentes via Tavily retornou matérias com sucesso!\n"));
+    } else {
+      console.error(pc.red("✖ Falha na busca de notícias recentes via Tavily:"), tavilyNews);
+      process.exit(1);
+    }
   }
 
   // Força SearXNG para os testes locais do SearXNG (testes 2 a 5)
