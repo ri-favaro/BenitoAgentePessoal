@@ -68,11 +68,33 @@ export async function generateNewsDigest(
       const searchAction = options.customSearchTool
         ? options.customSearchTool(topic)
         : (async () => {
-            const query = `${topic} news updates`;
-            const result: any = await webTools.search_web.execute(
-              { query, numResults: 4, categories: "general,news" },
+            // Busca primária: Notícias frescas dos últimos 3 dias via portal de notícias (Tavily topic: news)
+            const primaryQuery = `${topic} news`;
+            let result: any = await webTools.search_web.execute(
+              {
+                query: primaryQuery,
+                numResults: 4,
+                categories: "news,general",
+                topic: "news",
+                days: 3,
+                timeRange: "day",
+              },
               { messages: [], toolCallId: `digest-${Date.now()}` }
             );
+
+            // Fallback resiliente: se o filtro estrito de 3 dias não encontrar novidades, expande para 7 dias
+            if (result.success && (!result.summary || result.totalFound === 0)) {
+              result = await webTools.search_web.execute(
+                {
+                  query: `${topic} latest updates`,
+                  numResults: 4,
+                  categories: "general,news",
+                  timeRange: "week",
+                },
+                { messages: [], toolCallId: `digest-fallback-${Date.now()}` }
+              );
+            }
+
             return {
               success: result.success,
               summary: result.summary,

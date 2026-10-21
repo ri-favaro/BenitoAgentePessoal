@@ -285,8 +285,34 @@ export function createWebTools(state: WebToolsSessionState = createWebToolsState
           .describe(
             "Código de idioma opcional para filtrar os resultados (ex: 'pt-BR', 'en'). Se omitido, busca automática universal."
           ),
+        timeRange: z
+          .enum(["day", "week", "month", "year"])
+          .optional()
+          .describe(
+            "Filtro temporal para buscar apenas publicações recentes ('day' para últimas 24h, 'week' para últimos 7 dias)."
+          ),
+        topic: z
+          .enum(["general", "news", "finance"])
+          .optional()
+          .describe(
+            "Categoria de busca no Tavily ('general' para web ampla, 'news' para notícias em tempo real de portais de imprensa)."
+          ),
+        days: z
+          .number()
+          .optional()
+          .describe(
+            "Número de dias retroativos para filtro de notícias no Tavily (ex: 1 a 3 dias quando topic='news')."
+          ),
       }),
-      execute: async ({ query, numResults = 5, categories = "general,news", language }) => {
+      execute: async ({
+        query,
+        numResults = 5,
+        categories = "general,news",
+        language,
+        timeRange,
+        topic,
+        days,
+      }) => {
         try {
           const effectiveQuery = sanitizeSearchQuery(query);
 
@@ -312,16 +338,28 @@ export function createWebTools(state: WebToolsSessionState = createWebToolsState
             }
 
             try {
+              const tavilyPayload: Record<string, any> = {
+                api_key: config.tavily.apiKey,
+                query: effectiveQuery,
+                search_depth: "basic",
+                include_answer: true,
+                max_results: numResults,
+              };
+
+              if (topic) {
+                tavilyPayload.topic = topic;
+              }
+              if (days) {
+                tavilyPayload.days = days;
+              }
+              if (timeRange) {
+                tavilyPayload.time_range = timeRange;
+              }
+
               const tavilyRes = await fetch("https://api.tavily.com/search", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  api_key: config.tavily.apiKey,
-                  query: effectiveQuery,
-                  search_depth: "basic",
-                  include_answer: true,
-                  max_results: numResults,
-                }),
+                body: JSON.stringify(tavilyPayload),
                 signal: AbortSignal.timeout(12000),
               });
 
@@ -373,6 +411,9 @@ export function createWebTools(state: WebToolsSessionState = createWebToolsState
           }
           if (language) {
             url.searchParams.set("language", language);
+          }
+          if (timeRange) {
+            url.searchParams.set("time_range", timeRange);
           }
 
           const response = await fetch(url.toString(), {
