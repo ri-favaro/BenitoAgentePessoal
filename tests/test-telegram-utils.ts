@@ -3,6 +3,8 @@ import {
   splitTelegramMessage,
   formatToolFeedback,
   SessionTracker,
+  parseTelegramRetryAfter,
+  TelegramRateLimiter,
 } from "../src/interfaces/telegram-utils.js";
 
 function assert(condition: boolean, message: string) {
@@ -104,6 +106,59 @@ const disabledTracker = new SessionTracker(0);
 disabledTracker.updateActivity(chatIdA, baseTime);
 assert(!disabledTracker.isExpired(chatIdA, baseTime + 999999999), "Timeout 0 deve desativar expiração");
 console.log("✔ Todos os cenários de SessionTracker validados com sucesso!");
+
+// 5. Testes de parseTelegramRetryAfter
+console.log("\n5. Testando parseTelegramRetryAfter...");
+const grammyErrorObj = {
+  message: "Call to 'editMessageText' failed!",
+  parameters: { retry_after: 276 },
+};
+assert(parseTelegramRetryAfter(grammyErrorObj) === 276, "Deveria extrair retry_after de error.parameters");
+
+const regexError = new Error("Call to 'editMessageText' failed! (429: Too Many Requests: retry after 183)");
+assert(parseTelegramRetryAfter(regexError) === 183, "Deveria extrair retry after via regex da mensagem");
+
+const generic429 = new Error("Too Many Requests: flood control exceeded (429)");
+assert(parseTelegramRetryAfter(generic429) === 30, "Deveria retornar 30s defensivo para 429 sem número");
+
+const normalError = new Error("Bad Request: message is not modified");
+assert(parseTelegramRetryAfter(normalError) === null, "Deveria retornar null para erros normais");
+assert(parseTelegramRetryAfter(null) === null, "Deveria retornar null para erro nulo");
+console.log("✔ Testes de parseTelegramRetryAfter validados com sucesso!");
+
+// 6. Testes de TelegramRateLimiter
+console.log("\n6. Testando TelegramRateLimiter (Flood Wait Cooldown)...");
+const limiter = new TelegramRateLimiter();
+const testChatId = 12345;
+const otherChatId = 67890;
+const testNow = 1000000;
+
+// Inicialmente sem cooldown
+assert(!limiter.isRateLimited(testChatId, testNow), "Chat não deve estar limitado inicialmente");
+assert(limiter.getRemainingSeconds(testChatId, testNow) === 0, "Segundos restantes deve ser 0");
+
+// Aplica cooldown de 10s para testChatId
+limiter.setChatCooldown(testChatId, 10, testNow);
+assert(limiter.isRateLimited(testChatId, testNow + 5000), "Chat deve estar limitado após 5s de cooldown de 10s");
+assert(limiter.getRemainingSeconds(testChatId, testNow + 5000) === 5, "Segundos restantes deve ser 5");
+assert(!limiter.isRateLimited(otherChatId, testNow + 5000), "Outro chat não deve ser afetado pelo cooldown");
+
+// Após expirar cooldown
+assert(!limiter.isRateLimited(testChatId, testNow + 11000), "Chat deve ser liberado após 11s");
+assert(limiter.getRemainingSeconds(testChatId, testNow + 11000) === 0, "Segundos restantes após expirar deve ser 0");
+
+// Limpeza manual de chat
+limiter.setChatCooldown(testChatId, 30, testNow);
+limiter.clearChat(testChatId);
+assert(!limiter.isRateLimited(testChatId, testNow + 1000), "clearChat deve liberar chat imediatamente");
+
+// Cooldown global
+limiter.setGlobalCooldown(15, testNow);
+assert(limiter.isRateLimited(otherChatId, testNow + 5000), "Cooldown global deve limitar qualquer chat");
+assert(limiter.getRemainingSeconds(otherChatId, testNow + 5000) === 10, "Segundos restantes globais deve ser 10");
+limiter.clearAll();
+assert(!limiter.isRateLimited(otherChatId, testNow + 5000), "clearAll deve resetar limites globais e locais");
+console.log("✔ Testes de TelegramRateLimiter validados com sucesso!");
 
 console.log("\n🎉 Todos os testes de utilitários do Telegram passaram com 100% de sucesso!");
 
