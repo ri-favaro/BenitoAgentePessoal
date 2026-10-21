@@ -101,18 +101,18 @@ export const INITIAL_CAREER_PROFILE_CONTENT = `# 👨‍💻 Perfil Profissional
 - **Período:** abr/2026 – atual | **Local:** Santos, SP
 - **Stack em Produção:** Node.js, TypeScript, N8N, APIs REST, LLMs (Claude / Anthropic), Next.js, React, Supabase (PostgreSQL), Tailwind CSS, Zod, Jest, Git/GitHub.
 - **Realizações & Entregas Comprovadas:**
-  - Desenvolvimento e arquitetura de integrações e automações de processos críticos de negócio utilizando **Node.js**, **TypeScript** e **N8N**.
-  - Consumo e orquestração de APIs REST externas, destacando-se a **automação ponta a ponta do fluxo de postagem dos Correios** (pré-postagem, geração automatizada de etiquetas em PDF e dashboard de rastreamento em tempo real).
-  - Aplicação prática de **LLMs (incluindo Claude da Anthropic)** em fluxos produtivos de automação inteligente e triagem de dados.
-  - Contribuição fullstack na plataforma **CONTELE-OS**: desenvolvimento de módulos com **Next.js**, **React**, **TypeScript** e **Supabase (PostgreSQL)**, validação estrita de schemas com **Zod**, migrações SQL versionadas e testes unitários com **Jest**.
-  - Atuação em time ágil de desenvolvimento de produto utilizando metodologia **Kanban**, code reviews e Pull Requests estruturadas.
+  - **Automação Logística & Correios Ponta a Ponta:** Arquitetura e desenvolvimento de integração com as APIs REST dos Correios (cotação comparativa Correios vs transportadoras, pré-postagem automática, emissão de etiquetas em PDF e geração de comprovantes detalhados de logística reversa na troca de equipamentos), eliminando gargalos operacionais e erros manuais.
+  - **Dashboard de Rastreamento em Tempo Real:** Desenvolvimento de interface visual integrada à API Rastro dos Correios, com identificação automática de atrasos operacionais, filtros dinâmicos de status (Em trânsito, Aguardando retirada, Entregue, Atrasado) e busca inteligente por destinatário ou código de envio.
+  - **Integrações de Negócio & Workflows N8N:** Construção de pipelines corporativos de automação utilizando Node.js, TypeScript e N8N, orquestrando fluxos com Pipedrive (CRM), Asana (sincronização de tarefas e anexos de marketing/projetos) e grupos de WhatsApp corporativo via webhooks e mensageria assíncrona.
+  - **Engenharia de IA & LLMs em Produção:** Implementação de fluxos com Claude (Anthropic) para triagem inteligente de dados operacionais, abertura assistida de demandas e automação da auditoria de predição de churn para equipes de Customer Success (CS).
+  - **Desenvolvimento Fullstack no CONTELE-OS:** Desenvolvimento de módulos críticos com Next.js (App Router), React, TypeScript e Supabase (PostgreSQL), modelagem relacional com views otimizadas, migrações versionadas em SQL, validação estrita de runtime com Zod e testes unitários com Jest sob metodologia ágil Kanban.
 
 ### 2. O Especialista — Suporte de TI & Infraestrutura
 - **Período:** jun/2024 – dez/2024 (6 meses) | **Local:** Guarujá, SP
 - **Realizações & Entregas Comprovadas:**
-  - Prestação de suporte técnico nível 1 e 2 (presencial e remoto) atendendo simultaneamente de **4 a 5 empresas clientes**.
-  - Diagnóstico e resolução de incidentes críticos de TI, configuração de redes, infraestrutura local e manutenção de hardware.
-  - Interface direta com stakeholders e usuários finais, desenvolvendo comunicação clara sob pressão, senso de urgência e foco em SLA/resolução efetiva de problemas.
+  - Prestação de suporte técnico nível 1 e 2 (presencial e remoto) atendendo simultaneamente de 4 a 5 empresas clientes corporativas.
+  - Diagnóstico avançado de incidentes críticos de TI, configuração de redes locais (TCP/IP, roteamento, firewalls), infraestrutura e manutenção de hardware com foco em SLA e alta disponibilidade.
+  - Atuação direta com stakeholders e resolução rápida de problemas sob pressão operacional.
 
 ---
 
@@ -142,14 +142,14 @@ export const INITIAL_CAREER_PROFILE_CONTENT = `# 👨‍💻 Perfil Profissional
 
 ## 🚀 Projetos de Engenharia & Pesquisa Aplicada
 
-### 1. Benito — Assistente Pessoal Autônomo & Engenharia Cognitiva (2026)
+### 1. Benito — Assistente Autônomo & Engenharia de IA (2026)
 - **Repositório:** \`https://github.com/ri-favaro/BenitoAgentePessoal\`
-- **Stack:** Node.js 22+, TypeScript 5.8+, Vercel AI SDK, Ollama (Qwen 3.5 9B), LanceDB, EmbeddingGemma-2, grammY (Telegram Bot), Zod.
+- **Stack:** Node.js 22+, TypeScript 5.8+, Vercel AI SDK, Ollama, LanceDB, EmbeddingGemma-2, grammY, Zod, Jest.
 - **Destaques para o CV:**
-  - Arquitetura cognitiva de raciocínio desacoplado (*Decoupled Reasoning*) com parser FSM em streaming (\`<thinking>\`) sem adição de latência.
-  - Motor de RAG local multi-repositório com **LanceDB** e **EmbeddingGemma-2 (768d)** otimizado (~270MB RAM) e indexação incremental por hash SHA-256.
-  - Orquestrador técnico hierárquico capaz de empacotar contexto de issues do GitHub e delegar codificação autônoma via CLI com sandbox estrito de segurança (\`path-guard\`) e whitelist de processos.
-  - Cobertura de 13 suítes de testes automatizados validando regras financeiras em tempo real ($O(1)$), integrações GitHub REST/CLI, busca web (Tavily/Jina Reader) e automação via cron.
+  - Arquitetura modular de agentes autônomos com execução de ferramentas (tool calling) e streaming em tempo real.
+  - Motor local de RAG vetorial com LanceDB e EmbeddingGemma-2 (768d) otimizado (~270MB RAM) com indexação incremental via SHA-256.
+  - Sandbox estrito de segurança no sistema de arquivos e execução de comandos de terminal com whitelist de processos.
+  - Cobertura completa de testes automatizados com Jest (14 suítes) validando regras de negócio, integrações REST/CLI e persistência.
 
 ### 2. TCC Premiado & Publicado na COBRICS (Jan – Dez 2024)
 - **Título:** *Aprendizado e Diversão: Uma abordagem tecnológica com jogos lúdico-musicais na infância*
@@ -192,11 +192,14 @@ export const INITIAL_CAREER_PROFILE_CONTENT = `# 👨‍💻 Perfil Profissional
 ## 🎯 Diretrizes Obrigatórias para Adaptação de Currículo (Regras para o Benito)
 
 1. **Zero Alucinação & Fidelidade Absoluta:** Use exclusivamente os dados de contato, empresas (\`Contele\`, \`O Especialista\`), projetos (\`Benito\`, \`TCC COBRICS\`, \`RMDA Azure\`, \`Linux Buildroot\`, \`Widrow-Hoff\`), formação (\`UNISANTA\`, \`MBA USP/ESALQ\`) e idiomas (\`Inglês Avançado\`, \`Espanhol Intermediário\`) deste documento.
-2. **Filtro de Relevância por Vaga (Fim do "Tiro de Escopeta"):**
-   - Para vagas de **Backend / Fullstack / IA**: destaque \`TypeScript\`, \`Node.js\`, \`PostgreSQL\`, \`SQL\`, \`APIs REST\`, \`Docker\`, \`Next.js\`, \`React\`, \`N8N\`, \`LLMs (Claude/Ollama)\`, \`RAG/LanceDB\`, \`Jest\` e \`Azure\`. **Omita** ferramentas de automação industrial/CAD (\`AutoCAD\`, \`Fusion360\`, \`Ladder CLPs\`, \`Excel\`, \`Packet Tracer\`) que poluem a leitura do recrutador de software.
-   - Inclua os projetos de **Benito (IA/Node/TS)** e **Contele (APIs/Correios/LLMs/CONTELE-OS)** sempre no topo de relevância.
-3. **Tom de Nível Pleno:** Nunca escreva *"Profissional em início de carreira buscando aprender"*. Posicione como *"Engenheiro da Computação e Desenvolvedor de Software (pós-graduando em Engenharia de Software pela USP/ESALQ) com experiência prática em produção no desenvolvimento de APIs REST, integrações complexas, aplicações Fullstack (Node.js/TypeScript/React) e soluções com IA Generativa/LLMs"*.
-4. **Destaque do Inglês Avançado:** Sempre inclua a seção de Idiomas destacando **Inglês Avançado**, que é um diferencial competitivo forte para vagas Pleno.
+2. **Prioridade Máxima às Entregas de Produção da Contele:** Destaque sempre o impacto real de negócio em produção (integrações de APIs Correios, rastreamento, N8N, Supabase/PostgreSQL, CONTELE-OS e IA aplicada com Claude).
+3. **Seleção Contextual de Projetos (Sem Monopólio do Benito):**
+   - Para vagas de **IA Generativa / LLMs / Agentes**: inclua o **Benito** com foco em engenharia de software (tool calling, RAG local, 14 suítes de testes Jest).
+   - Para vagas gerais de **Backend / Fullstack / DevOps / Sistemas**: priorize projetos de infraestrutura e engenharia distribuída (**RMDA Azure**, **TCC COBRICS** ou **Linux Buildroot**), mantendo o foco das experiências profissionais na Contele.
+4. **Filtro de Relevância por Vaga:**
+   - Destaque \`TypeScript\`, \`Node.js\`, \`PostgreSQL\`, \`SQL\`, \`APIs REST\`, \`Docker\`, \`Next.js\`, \`React\`, \`N8N\`, \`Claude\`, \`Jest\` e \`Azure\`. Omita ferramentas industriais/CAD não pertinentes a software.
+5. **Tom de Nível Pleno:** Posicione como *"Engenheiro da Computação e Desenvolvedor de Software (pós-graduando em Engenharia de Software pela USP/ESALQ) com experiência prática em produção no desenvolvimento de APIs REST, integrações complexas, aplicações Fullstack (Node.js/TypeScript/React) e soluções com IA Generativa/LLMs"*.
+6. **Destaque do Inglês Avançado:** Sempre inclua a seção de Idiomas destacando **Inglês Avançado**, diferencial competitivo forte para vagas Pleno.
 `;
 
 /**
@@ -556,11 +559,11 @@ export function evaluateJobMatch(
   if (detectedTechs.includes("Docker")) strengths.push("Docker (Conteinerização, multi-stage builds e compose)");
   if (detectedTechs.includes("Next.js") || detectedTechs.includes("React")) strengths.push("Next.js / React (Experiência prática no CONTELE-OS)");
   if (detectedTechs.includes("APIs REST")) strengths.push("APIs RESTful (Design limpo, boas práticas HTTP, geração de PDFs e rastreamento Correios na Contele)");
-  if (detectedTechs.includes("IA Generativa & LLMs")) strengths.push("IA Generativa & LLMs (Engenharia de prompts, Vercel AI SDK e Ollama no Benito)");
+  if (detectedTechs.includes("IA Generativa & LLMs")) strengths.push("IA Generativa & LLMs (Aplicações em produção na Contele, Claude/Anthropic e engenharia de prompts)");
   if (detectedTechs.includes("Claude & Anthropic")) strengths.push("Claude & Anthropic (Aplicações produtivas de automação na Contele)");
-  if (detectedTechs.includes("Agentes de IA & Orquestração")) strengths.push("Agentes de IA & Orquestração (Arquitetura cognitiva do Benito, tool calling e raciocínio desacoplado)");
+  if (detectedTechs.includes("Agentes de IA & Orquestração")) strengths.push("Agentes de IA & Orquestração (Arquitetura modular com Vercel AI SDK, tool calling e automações N8N)");
   if (detectedTechs.includes("N8N & Automação de Workflows")) strengths.push("N8N & Automação de Workflows (Fluxos complexos, webhooks e integrações produtivas na Contele)");
-  if (detectedTechs.includes("Bases Vetoriais & RAG")) strengths.push("Bases Vetoriais & RAG (Pipeline local no Benito com LanceDB, EmbeddingGemma-2 768d e SHA-256)");
+  if (detectedTechs.includes("Bases Vetoriais & RAG")) strengths.push("Bases Vetoriais & RAG (Pipeline de busca semântica vetorial com LanceDB, embeddings locais e indexação incremental)");
   if (detectedTechs.includes("Python")) strengths.push("Python (Conhecimento prático para automações, APIs e scripts utilitários)");
   if (detectedTechs.includes("Go (Golang)")) strengths.push("Go (Golang) (Conhecimento prático de linguagem tipada e compilada)");
   if (detectedTechs.includes("C/C++ & Embarcados")) strengths.push("C/C++ & Sistemas Embarcados (Projetos de IoT, ESP32 com TCC publicado na COBRICS e Linux com Buildroot)");
@@ -639,10 +642,10 @@ export function evaluateJobMatch(
     verdictReason = `A vaga possui desvios críticos da sua stack atual (${criticalGaps.join("; ")}). O esforço de adaptação é desproporcional para o nível Pleno.`;
   } else if (criticalGaps.length === 1 || score < 70) {
     verdict = "Com ressalvas";
-    verdictReason = `Boa oportunidade de aplicação com posicionamento estratégico. Destaque seus projetos práticos (CONTELE-OS e Benito) e a formação teórica do MBA USP/Esalq para fechar os gaps pontuais (${quickWins.slice(0, 2).join(", ") || "conceituais"}).`;
+    verdictReason = `Boa oportunidade de aplicação com posicionamento estratégico. Destaque sua atuação prática em produção (CONTELE-OS e integrações) e a formação teórica do MBA USP/Esalq para fechar os gaps pontuais (${quickWins.slice(0, 2).join(", ") || "conceituais"}).`;
   } else {
     verdict = "Sim";
-    verdictReason = `Excelente aderência para o nível Pleno! Seu domínio em engenharia de software, projetos práticos (CONTELE-OS e Benito) e a base do MBA USP/Esalq atendem aos requisitos essenciais da vaga.`;
+    verdictReason = `Excelente aderência para o nível Pleno! Seu domínio em engenharia de software em produção (CONTELE-OS e integrações de microsserviços) e a base do MBA USP/Esalq atendem aos requisitos essenciais da vaga.`;
   }
 
   return {
@@ -687,9 +690,14 @@ export function buildConnectionPitch(
     ? `Acredito que posso somar rapidamente aos desafios de engenharia do time.`
     : `Acredito que posso somar rapidamente aos desafios de engenharia do time da ${company}.`;
 
+  const hasAi = strengths.some((s) => /ia|llm|agente|rag|claude/i.test(s));
+  const projectMention = hasAi
+    ? `Em projetos corporativos como o CONTELE-OS e em soluções de automação com agentes e IA generativa`
+    : `Em sistemas corporativos de alta criticidade como o ecossistema CONTELE-OS e integrações de microsserviços`;
+
   return `${greeting} Sou Engenheiro da Computação, pós-graduando no MBA em Engenharia de Software pela USP/Esalq, e venho atuando no desenvolvimento de soluções backend e fullstack robustas.
 
-No meu dia a dia técnico, tenho foco prático em ${topTechs}, além de arquitetura limpa, modelagem relacional em SQL e microsserviços. Em projetos de alta exigência como o CONTELE-OS e meu assistente pessoal Benito, apliquei conceitos avançados de ${mbaHighlights} para entregar código resiliente, testável e de alto desempenho.
+No meu dia a dia técnico, tenho foco prático em ${topTechs}, além de arquitetura limpa, modelagem relacional em SQL e microsserviços. ${projectMention}, apliquei conceitos avançados de ${mbaHighlights} para entregar código resiliente, testável e de alto desempenho.
 
 ${companyCallToAction} Fico à disposição para uma conversa rápida sobre como posso agregar valor ao projeto. Um abraço!`;
 }
@@ -714,22 +722,22 @@ export interface PracticalProjectItem {
 export const MASTER_PROJECTS_CATALOG: PracticalProjectItem[] = [
   {
     id: "benito",
-    title: "Benito — Assistente Pessoal Autônomo & Engenharia Cognitiva",
+    title: "Benito — Assistente Autônomo & Engenharia de IA",
     period: "2026",
     roleOrContext: "Criador & Engenheiro Principal",
-    stack: ["Node.js 22+", "TypeScript 5.8+", "Vercel AI SDK", "Ollama", "LanceDB", "EmbeddingGemma-2", "grammY", "Zod", "Jest"],
+    stack: ["Node.js 22+", "TypeScript 5.8+", "Vercel AI SDK", "LanceDB", "EmbeddingGemma-2", "Ollama", "Zod", "Jest"],
     repoUrl: "https://github.com/ri-favaro/BenitoAgentePessoal",
     bullets: [
-      "Concepção e engenharia de arquitetura cognitiva de raciocínio desacoplado (Decoupled Reasoning) com parser FSM em streaming (<thinking>) sem latência adicional.",
-      "Pipeline local de RAG com LanceDB e EmbeddingGemma-2 (768d) otimizado (~270MB RAM), com indexação incremental via SHA-256.",
-      "Runner de orquestração técnica com whitelist de comandos, controle de timeout e sandbox estrito de filesystem (path-guard).",
-      "Cobertura de 13 suítes de testes automatizados com Jest e Node.js Test Runner garantindo 100% de confiabilidade funcional.",
+      "Arquitetura modular de agentes autônomos com execução de ferramentas (tool calling) e streaming em tempo real.",
+      "Motor local de RAG vetorial com LanceDB e EmbeddingGemma-2 (768d) otimizado (~270MB RAM) com indexação incremental via SHA-256.",
+      "Sandbox estrito de segurança no sistema de arquivos e execução de comandos de terminal com whitelist de processos.",
+      "Cobertura completa de testes automatizados com Jest (14 suítes) validando regras de negócio, integrações REST/CLI e persistência.",
     ],
-    relevanceScore: 10,
+    relevanceScore: 9,
   },
   {
     id: "cobrics-tcc",
-    title: "TCC Premiado & Publicado na COBRICS — Jogos Lúdico-Musicais Interativos",
+    title: "Sistema Interativo com Hardware Embarcado & Cloud — Artigo Publicado no COBRICS 2024",
     period: "2024",
     roleOrContext: "Trabalho de Conclusão de Curso (Nota 10) & Artigo Publicado no Congresso COBRICS",
     stack: ["C/C++", "ESP32", "RFID", "Firebase", "Android", "Prototipagem Eletrônica"],
@@ -741,15 +749,15 @@ export const MASTER_PROJECTS_CATALOG: PracticalProjectItem[] = [
   },
   {
     id: "rmda-azure",
-    title: "RMDA — Robô de Telemetria e Monitoramento de Ambientes em Nuvem",
+    title: "RMDA — Telemetria Distribuída e Processamento em Nuvem na Azure",
     period: "2023",
-    roleOrContext: "Prova de Conceito IoT & Cloud",
-    stack: ["Microsoft Azure (VM)", "LoRaWAN", "The Things Network (TTN)", "IoT", "Dashboard Gráfico"],
+    roleOrContext: "Projeto IoT & Cloud Computing",
+    stack: ["Microsoft Azure (VM)", "LoRaWAN", "The Things Network (TTN)", "Python/Node.js", "Dashboard Gráfico"],
     repoUrl: "https://github.com/ri-favaro/Projeto-IOT-23",
     bullets: [
       "Desenvolvimento de telemetria distribuída com transmissão de dados de longo alcance via LoRaWAN/TTN para servidor e processamento em VM Microsoft Azure com dashboard gráfico.",
     ],
-    relevanceScore: 6,
+    relevanceScore: 7,
   },
   {
     id: "linux-buildroot",
@@ -783,6 +791,16 @@ export const MASTER_PROJECTS_CATALOG: PracticalProjectItem[] = [
 export function selectTailoredProjects(keyTechnologies: string[] = []): PracticalProjectItem[] {
   const techsLower = keyTechnologies.map((t) => t.toLowerCase());
 
+  const isAiOrAgents = techsLower.some((t) =>
+    t.includes("ia") ||
+    t.includes("llm") ||
+    t.includes("agente") ||
+    t.includes("rag") ||
+    t.includes("genai") ||
+    t.includes("prompt") ||
+    t.includes("claude") ||
+    t.includes("anthropic")
+  );
   const isEmbeddedOrLinux = techsLower.some((t) =>
     t.includes("c/c++") || t.includes("embarcados") || t.includes("linux") || t.includes("iot")
   );
@@ -790,25 +808,36 @@ export function selectTailoredProjects(keyTechnologies: string[] = []): Practica
     t.includes("azure") || t.includes("cloud") || t.includes("telemetria")
   );
 
+  if (isAiOrAgents) {
+    if (isCloudOrAzure) {
+      return [
+        MASTER_PROJECTS_CATALOG.find((p) => p.id === "benito")!,
+        MASTER_PROJECTS_CATALOG.find((p) => p.id === "rmda-azure")!,
+      ].filter(Boolean);
+    }
+    return [
+      MASTER_PROJECTS_CATALOG.find((p) => p.id === "benito")!,
+      MASTER_PROJECTS_CATALOG.find((p) => p.id === "cobrics-tcc")!,
+    ].filter(Boolean);
+  }
+
   if (isEmbeddedOrLinux) {
     return [
       MASTER_PROJECTS_CATALOG.find((p) => p.id === "cobrics-tcc")!,
       MASTER_PROJECTS_CATALOG.find((p) => p.id === "linux-buildroot")!,
-      MASTER_PROJECTS_CATALOG.find((p) => p.id === "benito")!,
     ].filter(Boolean);
   }
 
   if (isCloudOrAzure) {
     return [
-      MASTER_PROJECTS_CATALOG.find((p) => p.id === "benito")!,
       MASTER_PROJECTS_CATALOG.find((p) => p.id === "rmda-azure")!,
       MASTER_PROJECTS_CATALOG.find((p) => p.id === "cobrics-tcc")!,
     ].filter(Boolean);
   }
 
-  // Padrão para Backend / IA / Fullstack / Software em geral
+  // Padrão para Backend / Fullstack / DevOps / Software em geral (Prioridade para infraestrutura e engenharia)
   return [
-    MASTER_PROJECTS_CATALOG.find((p) => p.id === "benito")!,
+    MASTER_PROJECTS_CATALOG.find((p) => p.id === "rmda-azure")!,
     MASTER_PROJECTS_CATALOG.find((p) => p.id === "cobrics-tcc")!,
   ].filter(Boolean);
 }
@@ -835,7 +864,7 @@ FATOS REAIS QUE VOCÊ DEVE USAR (NUNCA INVENTE OUTROS):
 - Graduação: Engenheiro da Computação (Universidade Santa Cecília - UNISANTA, TCC nota 10 publicado na COBRICS 2024).
 - Pós-graduação: MBA em Engenharia de Software (USP/ESALQ) em andamento.
 - Atuação Atual: Contele (Desenvolvedor de Integrações - Node.js, TypeScript, N8N, fluxo de postagem Correios, LLMs/Claude e CONTELE-OS com Next.js/PostgreSQL).
-- Projetos: Benito (assistente autônomo com RAG LanceDB e Vercel AI SDK).
+- Projetos Relevantes: CONTELE-OS (Next.js/PostgreSQL), Integrações Correios/N8N, e soluções em produção de automação e engenharia de software.
 - Idiomas: Inglês Avançado.
 
 DIRETRIZES ESTREITAS:
@@ -910,16 +939,17 @@ export async function buildTailoredResumeMarkdown(
     ``,
     `#### **Contele** | *Desenvolvedor de Integrações · Foco em IA e Automações*`,
     `*Santos, SP | abr/2026 – atual*`,
-    `- Desenvolvimento de integrações críticas e automações de processos de negócio com **Node.js**, **TypeScript** e **N8N**.`,
-    `- Automação completa ponta a ponta do fluxo de postagem dos **Correios** via APIs REST externas (pré-postagem, geração automatizada de etiquetas em PDF e dashboard de rastreamento).`,
-    `- Aplicação prática de **LLMs (Anthropic Claude)** em fluxos produtivos de automação inteligente e triagem de dados.`,
-    `- Desenvolvimento fullstack na plataforma **CONTELE-OS** utilizando **Next.js**, **React**, **TypeScript** e **Supabase (PostgreSQL)** com migrações versionadas e validação estrita via **Zod**.`,
-    `- Implementação de testes unitários com **Jest** e atuação em equipe ágil com metodologia **Kanban**.`,
+    `- **Automação Logística & Correios Ponta a Ponta:** Arquitetura e desenvolvimento de integração com as APIs REST dos Correios (cotação comparativa Correios vs transportadoras, pré-postagem automática, emissão de etiquetas em PDF e geração de comprovantes detalhados de logística reversa na troca de equipamentos), eliminando erros manuais.`,
+    `- **Dashboard de Rastreamento em Tempo Real:** Desenvolvimento de interface visual integrada à API Rastro dos Correios, com identificação automática de atrasos operacionais, filtros dinâmicos de status (Em trânsito, Aguardando retirada, Entregue, Atrasado) e busca inteligente por destinatário ou código de envio.`,
+    `- **Integrações de Negócio & Workflows N8N:** Construção de pipelines corporativos de automação utilizando Node.js, TypeScript e N8N, orquestrando fluxos com Pipedrive (CRM), Asana (sincronização de tarefas e anexos de marketing/projetos) e grupos corporativos de WhatsApp via webhooks e mensageria assíncrona.`,
+    `- **Engenharia de IA & LLMs em Produção:** Implementação de fluxos com Claude (Anthropic) para triagem inteligente de dados operacionais, abertura assistida de demandas e automação da auditoria de predição de churn para equipes de Customer Success (CS).`,
+    `- **Desenvolvimento Fullstack no CONTELE-OS:** Desenvolvimento de módulos críticos com Next.js (App Router), React, TypeScript e Supabase (PostgreSQL), modelagem relacional com views otimizadas, migrações versionadas em SQL, validação estrita de runtime com Zod e testes unitários com Jest sob metodologia ágil Kanban.`,
     ``,
     `#### **O Especialista** | *Suporte de TI & Infraestrutura*`,
     `*Guarujá, SP | jun/2024 – dez/2024 (6 meses)*`,
-    `- Prestação de suporte técnico nível 1 e 2 presencial e remoto para 4 a 5 empresas clientes simultâneas.`,
-    `- Diagnóstico e reparo de hardware, configuração de redes locais e resolução de incidentes críticos de TI com foco em agilidade e SLA.`,
+    `- Prestação de suporte técnico nível 1 e 2 (presencial e remoto) atendendo simultaneamente de 4 a 5 empresas clientes corporativas.`,
+    `- Diagnóstico avançado de incidentes críticos de TI, configuração de redes locais (TCP/IP, roteamento, firewalls), infraestrutura e manutenção de hardware com foco em SLA e alta disponibilidade.`,
+    `- Atuação direta com stakeholders e resolução rápida de problemas sob pressão operacional.`,
     ``,
     `---`,
     ``,
@@ -1030,6 +1060,11 @@ export function buildTailoredPitchAndAtsGuide(
 ): string {
   const dateStr = new Date().toISOString().slice(0, 10);
 
+  const hasAi = evalResult.keyTechnologies.some((t) => /ia|llm|agente|rag|claude/i.test(t));
+  const technicalHighlight = hasAi
+    ? `- **Destaque em Engenharia de IA & LLMs:** Evidencie o uso prático de LLMs/Claude em fluxos corporativos na Contele e a arquitetura de RAG vetorial/agentes autônomos (Vercel AI SDK, Tool Calling).`
+    : `- **Destaque de Arquitetura & Backend:** Destaque o ecossistema CONTELE-OS (Next.js, Supabase/PostgreSQL, migrations versionadas, Zod) e as práticas de Clean Architecture / TDD aplicadas no MBA USP/Esalq.`;
+
   return `# 🎯 Pitch de Conexão & Guia de Otimização ATS
 **Cargo Alvo:** ${role} | **Empresa:** ${company}
 **Data da Versão:** ${dateStr} | **Match Score:** ${evalResult.matchScore}% (${evalResult.verdict.toUpperCase()})
@@ -1056,8 +1091,8 @@ ${evalResult.keyTechnologies.map((t) => `- [x] **${t}:** presente e evidenciada 
 - **Arquivo para Upload:** Exporte o arquivo limpo \`${cvFileName}\` em PDF antes do upload.
 
 ### 🎯 3. Pontos de Atenção para a Entrevista Técnica
-- **Destaque de Engenharia na Contele:** Mencione a integração com Correios (geração de PDF, APIs REST e dashboard) e o uso do Claude/N8N para automação.
-- **Destaque do Projeto Benito:** Use o Benito como exemplo de arquitetura de alta performance (RAG local com LanceDB, streaming com parser FSM e testes automatizados com Jest).
+- **Destaque de Engenharia na Contele:** Mencione a integração com Correios (geração de PDF, APIs REST e dashboard de rastreamento) e as automações corporativas com N8N/Claude.
+${technicalHighlight}
 - **Fechamento de Quick Wins do MBA:** ${evalResult.quickWins.slice(0, 2).join("; ") || "Evidencie Clean Architecture e testes unitários."}
 `;
 }

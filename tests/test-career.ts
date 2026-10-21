@@ -231,7 +231,12 @@ async function runCareerTests() {
     console.log(pc.yellow("\n4. Testando selectTailoredProjects (Top 2-3 projetos por trilha)..."));
     const backendProjects = selectTailoredProjects(["TypeScript", "Node.js", "PostgreSQL", "Clean Architecture"]);
     assert.ok(backendProjects.length >= 2 && backendProjects.length <= 3);
-    assert.ok(backendProjects.some((p) => p.id === "benito"));
+    assert.ok(backendProjects.some((p) => p.id === "rmda-azure" || p.id === "cobrics-tcc"));
+    // Garante que para backend puro o Benito não monopoliza o topo da lista
+    assert.strictEqual(backendProjects.some((p) => p.id === "benito"), false);
+
+    const aiProjects = selectTailoredProjects(["TypeScript", "Node.js", "IA Generativa & LLMs", "Agentes de IA & Orquestração"]);
+    assert.ok(aiProjects.some((p) => p.id === "benito"));
 
     const iotProjects = selectTailoredProjects(["C/C++", "Linux", "Sistemas Embarcados", "Azure"]);
     assert.ok(iotProjects.some((p) => p.id === "linux-buildroot" || p.id === "rmda-azure" || p.id === "cobrics-tcc"));
@@ -264,7 +269,7 @@ async function runCareerTests() {
     assert.ok(cvFileContent.includes("Resumo Profissional"));
     assert.ok(cvFileContent.includes("Competências Técnicas"));
     assert.ok(cvFileContent.includes("CONTELE"));
-    assert.ok(cvFileContent.includes("Benito"));
+    assert.ok(cvFileContent.includes("RMDA") || cvFileContent.includes("COBRICS"));
     assert.strictEqual(cvFileContent.includes("## 🎯 Pitch de Conexão"), false); // Desacoplado com sucesso!
 
     // Valida o Pitch Markdown com Guia ATS
