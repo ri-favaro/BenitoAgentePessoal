@@ -22,3 +22,6 @@ Thumbs.db
 .lancedb/
 .models/
 Benito.exe
+
+# Rascunhos e scripts temporarios
+scratch/
