@@ -154,13 +154,16 @@ Ao evoluir os módulos `src/core/self-auditor.ts`, `src/core/github-service.ts` 
    - O `SelfAuditor` monitora o arquivo `logs/reasoning.log` para calcular tempos médios de resposta e detectar gargalos de latência.
    - Realiza varreduras estáticas de cobertura comparando arquivos do `src/` com as suítes de `tests/`, apontando possíveis lacunas de teste (`testGaps`).
    - Verifica violações de sandbox e diretórios não autorizados.
-2. **Distinção Estrita entre Issue e Pull Request (PR):**
+2. **Escopo Estrito de Repositório (Benito vs. Pedidos Avulsos do Usuário):**
+   - As ferramentas `create_github_issue`, `create_github_pr` e `delegate_issue_to_coding_agent` destinam-se **exclusivamente à evolução, débitos técnicos e manutenção da infraestrutura do assistente Benito**.
+   - **Regra Inviolável (Zero Poluição de Repositório):** NUNCA crie issues, branches ou PRs para atender a dúvidas de programação, scripts avulsos, exemplos didáticos ou rascunhos solicitados pelo Luiz Ricardo (ex: "faça um script em python", "monte uma calculadora em HTML"). Pedidos de código do usuário devem ser respondidos diretamente no chat ou salvos em `scratch/`.
+3. **Distinção Estrita entre Issue e Pull Request (PR):**
    - **Issues (`create_github_issue`):** Itens de planejamento, débitos técnicos e propostas de novas capacidades. NUNCA recrie uma issue já existente.
    - **Pull Requests (`create_github_pr`):** Proposta de merge de código pronto de uma branch de feature para a branch base (`main`). NUNCA crie uma issue quando o usuário pedir para abrir um PR.
-3. **Protocolo Estrito Human-in-the-Loop:**
+4. **Protocolo Estrito Human-in-the-Loop:**
    - **Regra Inviolável:** O Benito NUNCA cria issues ou PRs silenciosamente ou autonomamente no GitHub.
    - Ao identificar uma melhoria ou ao concluir uma branch, apresente no chat uma minuta objetiva (título em Conventional Commits e escopo) e solicite autorização explícita do Luiz Ricardo antes de disparar `create_github_issue` ou `create_github_pr`.
-4. **Marca d'Água Padronizada no Body (Sem Emojis):**
+5. **Marca d'Água Padronizada no Body (Sem Emojis):**
    - Toda Issue criada pelo Benito recebe no rodapé: `> *Issue criada e registrada por Benito.*`
    - Todo PR criado pelo Benito recebe no rodapé: `> *Pull Request criado por Benito.*`
 
@@ -183,6 +186,9 @@ Ao manter ou evoluir recursos em `src/orchestration/` e `src/tools/orchestration
    - **Regra Inviolável:** O Benito NUNCA dispara a ferramenta `delegate_issue_to_coding_agent` em modo de execução real (`confirmedByUser: true`) sem apresentar a proposta e obter autorização expressa do Luiz Ricardo.
    - Suporta a flag `autoCreatePr: true` para, após o build passar com 100% de sucesso, sincronizar a branch no GitHub e abrir a Pull Request automaticamente com marca d'água.
    - Para prévias e inspeção de prompt estruturado, utilize sempre `prepare_coding_task` ou o parâmetro `dryRun: true`.
+5. **Calibração de Escopo para o AGY CLI:**
+   - O AGY CLI é uma ferramenta pesada e cara em tokens, destinada **exclusivamente a implementar features ou correções aprovadas do próprio repositório do Benito**.
+   - NUNCA use o AGY para criar códigos avulsos ou projetos pontuais do usuário dentro da árvore do projeto. Pedidos de código do usuário devem ser respondidos de forma enxuta diretamente no chat ou salvos em `scratch/`.
 
 ## 💬 Módulo do Telegram & Session Tracker (TTL de Inatividade)
 
