@@ -8,7 +8,7 @@ export function createGitHubTools(gitHubService?: GitHubService) {
   return {
     create_github_issue: tool({
       description:
-        "Cria uma nova issue no repositório do GitHub com título descritivo, corpo detalhado e labels. ATENÇÃO OBRIGATÓRIA: NUNCA acione esta ferramenta sem antes propor a minuta no chat (título e escopo) e obter confirmação ou autorização explícita do usuário (Human-in-the-Loop).",
+        "Cria uma nova issue no repositório do GitHub com título descritivo, corpo detalhado e labels. ESCOPO ESTRITO: Use EXCLUSIVAMENTE para registrar bugs, débitos técnicos ou novas capacidades no código-fonte do próprio assistente Benito (este projeto). NUNCA acione ou proponha esta ferramenta para responder a dúvidas de programação do usuário, gerar códigos didáticos, scripts avulsos ou snippets pontuais (ex: 'faça um script em python', 'monte um HTML'). Pedidos de código para uso do usuário devem ser respondidos diretamente no chat ou salvos em scratch/. ATENÇÃO OBRIGATÓRIA: NUNCA acione sem antes propor a minuta no chat (título e escopo) e obter autorização explícita do usuário (Human-in-the-Loop).",
       parameters: z.object({
         title: z
           .string()

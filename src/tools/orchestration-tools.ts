@@ -171,7 +171,7 @@ export function createOrchestrationTools(options?: OrchestrationToolsOptions) {
 
     delegate_issue_to_coding_agent: tool({
       description:
-        "Delega a implementação de uma issue do GitHub para a LLM especializada de programação (AGY CLI) em processo isolado. ATENÇÃO OBRIGATÓRIA (HUMAN-IN-THE-LOOP): NUNCA execute em modo real sem antes propor a minuta no chat (título, escopo e branch) e obter autorização explícita do usuário. Use dryRun: true para simulação segura sem alterar arquivos.",
+        "Delega a implementação de uma issue do GitHub para a LLM especializada de programação (AGY CLI) em processo isolado. ESCOPO ESTRITO: Destinado EXCLUSIVAMENTE à implementação de issues técnicas abertas no repositório do Benito (este projeto). NUNCA utilize para solicitações pontuais de geração de código, exemplos ou scripts para o usuário; essas devem ser atendidas diretamente no chat ou em scratch/. ATENÇÃO OBRIGATÓRIA (HUMAN-IN-THE-LOOP): NUNCA execute em modo real sem antes propor a minuta no chat (título, escopo e branch) e obter autorização explícita do usuário. Use dryRun: true para simulação segura sem alterar arquivos.",
       parameters: z.object({
         issueNumber: z
           .number()
