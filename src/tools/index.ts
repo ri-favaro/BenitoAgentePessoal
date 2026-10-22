@@ -10,6 +10,7 @@ import { createGitHubTools } from "./github-tools.js";
 import { createObsidianTools } from "./obsidian-tools.js";
 import { createCareerTools } from "./career-tools.js";
 import { createOrchestrationTools } from "./orchestration-tools.js";
+import { createCalculatorTools } from "./calculator-tools.js";
 import { EmbeddingService } from "../core/embedding-service.js";
 import { VectorStore } from "../core/vector-store.js";
 import { KnowledgeIndexer } from "../core/indexer.js";
@@ -80,5 +81,6 @@ export function getAgentTools(
       vectorStore,
       embeddingService,
     }),
+    ...createCalculatorTools(),
   };
 }

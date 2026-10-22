@@ -74,16 +74,22 @@ src/
 │   ├── github-tools.ts        # Gestão de issues, PRs e digest executivo (create_github_issue, create_github_pr, list_github_prs, summarize_github_pr, etc.)
 │   ├── orchestration-tools.ts # Ferramentas para console e delegação ao AGY CLI (Issue #21)
 │   ├── audit-tools.ts         # Auto-auditoria holística (run_self_audit)
+│   ├── calculator-tools.ts    # Ferramenta da calculadora (calculate, get_calculator_status)
 │   ├── path-guard.ts          # Validação e restrição de diretórios autorizados
 │   └── memory-tools.ts        # Ferramentas para o modelo persistir fatos e aprendizados
+tools/calculadora/    # Calculadora em Python Flask com interface HTML responsiva (Issue #48)
+├── calculator.py          # Motor matemático desacoplado e tipado com histórico
+├── app.py                 # Servidor Flask e endpoints RESTful
+├── templates/index.html   # Interface HTML responsiva
+├── static/                # Estilos CSS modernos e script JS interativo
+└── test_calculator.py     # Suíte de testes unitários em Python (20 testes)
 scripts/              # Utilitários de inicialização e manutenção
 ├── start-embedding-server.ps1 # Launcher do llama-server com consumo otimizado (270MB RAM)
-├── start-embedding-server.ps1   # Launcher do llama-server com consumo otimizado (270MB RAM)
 ├── install-desktop-launcher.ps1 # Compilador do Benito.exe nativo (Job Object + ícone) para Área de Trabalho
 └── index-knowledge.ts           # Script CLI para disparar indexação em lote (npm run index)
 .lancedb/             # Armazenamento vetorial local embutido (tabelas: codebase, vault)
 logs/                 # Auditoria contínua de raciocínio e intenções (reasoning.log JSONL)
-tests/                # Suíte de testes automatizados (12 suítes com 100% de cobertura funcional)
+tests/                # Suíte de testes automatizados (15 suítes com 100% de cobertura funcional)
 memory/               # Memória persistente do Benito (profile.md, rules.md, learnings.md, topics/)
 ```
 
@@ -232,11 +238,11 @@ Ao manter ou evoluir recursos em `src/tools/career-tools.ts`:
 | `npm run embedding:serve` | Inicia o servidor local do llama-server para embeddings (EmbeddingGemma-2) |
 | `npm run index` | Dispara a indexação incremental do codebase e cofre Obsidian |
 | `npm run build` | Compila o projeto com o TypeScript (`tsc`) |
-| `npm test` | Executa a suíte completa de testes automatizados (todas as 13 suítes) |
+| `npm test` | Executa a suíte completa de testes automatizados (todas as 15 suítes) |
+| `npm run calculator` | Inicia o servidor web da Calculadora Benito (Python Flask) em http://127.0.0.1:5050 |
 | `npm run launcher` | Abre a Central de Inicialização (sobe dependências + menu CLI/Telegram/Cron) |
 | `npm run desktop:install` | Compila e instala o executável `Benito.exe` na Área de Trabalho |
-| `npm test` | Executa a suíte completa de testes automatizados (todas as 14 suítes) |
-| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`, `automation`, `obsidian`, `orchestration`, `career`, `launcher`) |
+| `npm run test:<nome>` | Executa uma suíte individual (`reasoning`, `filesystem`, `finance`, `search`, `memory`, `telegram`, `retrieval`, `audit`, `github`, `automation`, `obsidian`, `orchestration`, `career`, `launcher`, `calculator`) |
 
 ### Regras Gerais
 - **Idioma de Commits:** Sempre em **Português do Brasil (pt-br)** com Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, etc.).

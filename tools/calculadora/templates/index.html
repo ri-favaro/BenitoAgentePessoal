@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benito Calculadora • Ferramenta de Utilidade & Demonstração</title>
+  <meta name="description" content="Calculadora modular com backend Python Flask e frontend responsivo" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header Principal -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">🧮</div>
+        <div class="brand-text">
+          <h1>Benito Calculadora</h1>
+          <p>Ferramenta Modular • Python & Flask</p>
+        </div>
+      </div>
+      <div class="api-badge" id="apiStatusBadge" title="Status da API Backend">
+        <span class="status-dot"></span>
+        <span class="status-label" id="apiStatusText">Conectando...</span>
+      </div>
+    </header>
+
+    <!-- Conteúdo Central: Calculadora e Histórico -->
+    <main class="main-container">
+      <!-- Bloco da Calculadora -->
+      <section class="calculator-card" aria-label="Calculadora">
+        <!-- Display Digital -->
+        <div class="display-container">
+          <div class="display-expression" id="subDisplay" aria-live="polite"></div>
+          <div class="display-main" id="mainDisplay" role="textbox" aria-readonly="true" aria-label="Valor Atual">0</div>
+        </div>
+
+        <!-- Teclado Grid -->
+        <div class="keypad-grid" role="group" aria-label="Teclado da Calculadora">
+          <!-- Linha 1: Funções de Limpeza e Divisão -->
+          <button type="button" class="btn btn-func" data-action="all-clear" title="Limpar tudo (Esc)" aria-label="Limpar tudo">AC</button>
+          <button type="button" class="btn btn-func" data-action="delete" title="Apagar último dígito (Backspace)" aria-label="Apagar dígito">⌫</button>
+          <button type="button" class="btn btn-func" data-action="negate" title="Inverter sinal (±)" aria-label="Inverter sinal">±</button>
+          <button type="button" class="btn btn-op" data-action="divide" data-symbol="÷" title="Dividir (/)" aria-label="Dividir">÷</button>
+
+          <!-- Linha 2: 7, 8, 9, Multiplicação -->
+          <button type="button" class="btn btn-num" data-num="7">7</button>
+          <button type="button" class="btn btn-num" data-num="8">8</button>
+          <button type="button" class="btn btn-num" data-num="9">9</button>
+          <button type="button" class="btn btn-op" data-action="multiply" data-symbol="×" title="Multiplicar (*)" aria-label="Multiplicar">×</button>
+
+          <!-- Linha 3: 4, 5, 6, Subtração -->
+          <button type="button" class="btn btn-num" data-num="4">4</button>
+          <button type="button" class="btn btn-num" data-num="5">5</button>
+          <button type="button" class="btn btn-num" data-num="6">6</button>
+          <button type="button" class="btn btn-op" data-action="subtract" data-symbol="-" title="Subtrair (-)" aria-label="Subtrair">-</button>
+
+          <!-- Linha 4: 1, 2, 3, Adição -->
+          <button type="button" class="btn btn-num" data-num="1">1</button>
+          <button type="button" class="btn btn-num" data-num="2">2</button>
+          <button type="button" class="btn btn-num" data-num="3">3</button>
+          <button type="button" class="btn btn-op" data-action="add" data-symbol="+" title="Somar (+)" aria-label="Somar">+</button>
+
+          <!-- Linha 5: 0, Ponto Decimal, Igual -->
+          <button type="button" class="btn btn-num btn-zero" data-num="0">0</button>
+          <button type="button" class="btn btn-num" data-action="decimal" title="Ponto decimal (.)" aria-label="Ponto decimal">,</button>
+          <button type="button" class="btn btn-equals" data-action="equals" title="Calcular resultado (Enter ou =)" aria-label="Calcular resultado">=</button>
+        </div>
+      </section>
+
+      <!-- Painel de Histórico -->
+      <aside class="history-card" aria-label="Histórico de Cálculos">
+        <div class="history-header">
+          <div class="history-title">
+            <span class="history-icon">🕒</span>
+            <h2>Histórico Recente</h2>
+          </div>
+          <button type="button" class="btn-clear-history" id="clearHistoryBtn" title="Limpar histórico">
+            Limpar
+          </button>
+        </div>
+
+        <div class="history-list" id="historyList" tabindex="0">
+          <div class="history-empty" id="historyEmpty">
+            Nenhum cálculo realizado ainda.
+          </div>
+        </div>
+
+        <!-- Guia de Atalhos -->
+        <div class="shortcuts-guide">
+          <span class="shortcuts-title">⌨️ Atalhos de Teclado:</span>
+          <div class="shortcuts-tags">
+            <span class="tag">0-9</span>
+            <span class="tag">+ - * /</span>
+            <span class="tag">Enter</span>
+            <span class="tag">Backspace</span>
+            <span class="tag">Esc</span>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Feedback Toast para Notificações de Erro -->
+    <div class="toast-notification" id="toastNotification" role="alert" aria-live="assertive">
+      <span class="toast-icon" id="toastIcon">⚠️</span>
+      <span class="toast-message" id="toastMessage"></span>
+    </div>
+
+    <!-- Rodapé -->
+    <footer class="app-footer">
+      <p>Desenvolvido para o <strong>Benito Agente Pessoal</strong> • Arquitetura Modular em Python & TypeScript</p>
+    </footer>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

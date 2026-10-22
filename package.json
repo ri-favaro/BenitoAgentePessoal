@@ -8,7 +8,7 @@
     "dev": "tsx src/cli.ts",
     "start": "tsx src/cli.ts",
     "build": "tsc",
-    "test": "npm run test:reasoning && npm run test:filesystem && npm run test:finance && npm run test:search && npm run test:memory && npm run test:telegram && npm run test:retrieval && npm run test:audit && npm run test:github && npm run test:automation && npm run test:obsidian && npm run test:orchestration && npm run test:career && npm run test:launcher",
+    "test": "npm run test:reasoning && npm run test:filesystem && npm run test:finance && npm run test:search && npm run test:memory && npm run test:telegram && npm run test:retrieval && npm run test:audit && npm run test:github && npm run test:automation && npm run test:obsidian && npm run test:orchestration && npm run test:career && npm run test:launcher && npm run test:calculator",
     "test:reasoning": "tsx tests/test-reasoning.ts",
     "test:filesystem": "tsx tests/test-filesystem.ts",
     "test:finance": "tsx tests/test-finance.ts",
@@ -22,13 +22,15 @@
     "test:obsidian": "tsx tests/test-obsidian.ts",
     "test:orchestration": "tsx tests/test-orchestration.ts",
     "test:career": "tsx tests/test-career.ts",
+    "test:launcher": "tsx tests/test-launcher.ts",
+    "test:calculator": "tsx tests/test-calculator.ts",
+    "calculator": "py tools/calculadora/app.py",
     "embedding:serve": "powershell -ExecutionPolicy Bypass -File scripts/start-embedding-server.ps1",
     "index": "tsx scripts/index-knowledge.ts",
     "telegram": "tsx src/interfaces/telegram.ts",
     "automation": "tsx src/automation/index.ts",
     "launcher": "tsx src/launcher.ts",
-    "desktop:install": "powershell -ExecutionPolicy Bypass -File scripts/install-desktop-launcher.ps1",
-    "test:launcher": "tsx tests/test-launcher.ts"
+    "desktop:install": "powershell -ExecutionPolicy Bypass -File scripts/install-desktop-launcher.ps1"
   },
   "keywords": [
     "ai",
